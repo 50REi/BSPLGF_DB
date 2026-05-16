@@ -1,0 +1,72 @@
+{
+  "periods": ["2022/3期", "2023/3期", "2024/3期", "2025/3期"],
+  "balanceSheet": {
+    "assets": [
+      { "label": "流動資産", "values": [4820, 5240, 5610, 6020], "emphasis": true },
+      { "label": "現金及び預金", "values": [1120, 1280, 1410, 1550], "indent": true },
+      { "label": "売掛金", "values": [2010, 2180, 2340, 2510], "indent": true },
+      { "label": "棚卸資産", "values": [1450, 1580, 1700, 1820], "indent": true },
+      { "label": "その他流動資産", "values": [240, 200, 160, 140], "indent": true },
+      { "label": "固定資産", "values": [5100, 5280, 5450, 5620], "emphasis": true },
+      { "label": "有形固定資産", "values": [3800, 3920, 4040, 4180], "indent": true },
+      { "label": "無形固定資産", "values": [680, 720, 760, 800], "indent": true },
+      { "label": "投資その他", "values": [620, 640, 650, 640], "indent": true },
+      { "label": "資産合計", "values": [9920, 10520, 11060, 11640], "emphasis": true }
+    ],
+    "liabilitiesAndEquity": [
+      { "label": "流動負債", "values": [2100, 2240, 2380, 2520], "emphasis": true },
+      { "label": "買掛金", "values": [980, 1050, 1120, 1190], "indent": true },
+      { "label": "短期借入金", "values": [620, 680, 740, 800], "indent": true },
+      { "label": "その他流動負債", "values": [500, 510, 520, 530], "indent": true },
+      { "label": "固定負債", "values": [2400, 2320, 2240, 2160], "emphasis": true },
+      { "label": "長期借入金", "values": [2400, 2320, 2240, 2160], "indent": true },
+      { "label": "純資産", "values": [5420, 5960, 6440, 6960], "emphasis": true },
+      { "label": "資本金", "values": [1000, 1000, 1000, 1000], "indent": true },
+      { "label": "利益剰余金", "values": [4420, 4960, 5440, 5960], "indent": true },
+      { "label": "負債・純資産合計", "values": [9920, 10520, 11060, 11640], "emphasis": true }
+    ]
+  },
+  "profitLoss": [
+    { "label": "売上高", "values": [18200, 19400, 20800, 22100], "emphasis": true },
+    { "label": "売上原価", "values": [11100, 11750, 12500, 13200], "indent": true },
+    { "label": "売上総利益", "values": [7100, 7650, 8300, 8900], "emphasis": true },
+    { "label": "販売費及び一般管理費", "values": [4200, 4450, 4680, 4920], "indent": true },
+    { "label": "営業利益", "values": [2900, 3200, 3620, 3980], "emphasis": true },
+    { "label": "営業外収益", "values": [120, 140, 130, 150], "indent": true },
+    { "label": "営業外費用", "values": [180, 160, 150, 140], "indent": true },
+    { "label": "経常利益", "values": [2840, 3180, 3600, 3990], "emphasis": true },
+    { "label": "法人税等", "values": [920, 1020, 1140, 1260], "indent": true },
+    { "label": "当期純利益", "values": [1920, 2160, 2460, 2730], "emphasis": true }
+  ],
+  "cashFlow": [
+    {
+      "label": "営業活動によるキャッシュ・フロー",
+      "values": [3100, 3380, 3720, 4050],
+      "emphasis": true
+    },
+    { "label": "減価償却費", "values": [820, 840, 860, 880], "indent": true },
+    { "label": "運転資本の増減", "values": [-180, -120, -90, -70], "indent": true },
+    {
+      "label": "投資活動によるキャッシュ・フロー",
+      "values": [-1450, -1520, -1480, -1510],
+      "emphasis": true
+    },
+    { "label": "有形固定資産の取得", "values": [-1200, -1280, -1220, -1260], "indent": true },
+    { "label": "その他投資", "values": [-250, -240, -260, -250], "indent": true },
+    {
+      "label": "財務活動によるキャッシュ・フロー",
+      "values": [-1620, -1700, -1780, -1860],
+      "emphasis": true
+    },
+    { "label": "借入金の返済", "values": [-800, -800, -800, -800], "indent": true },
+    { "label": "配当金の支払", "values": [-820, -900, -980, -1060], "indent": true },
+    { "label": "現金及び現金同等物の増減", "values": [30, 160, 460, 680], "emphasis": true },
+    { "label": "期末残高", "values": [1120, 1280, 1410, 1550], "emphasis": true }
+  ],
+  "kpis": {
+    "revenueGrowthYoY": 6.2,
+    "operatingMarginPct": 18.0,
+    "equityRatioPct": 59.8,
+    "freeCashFlow": 2540
+  }
+}
