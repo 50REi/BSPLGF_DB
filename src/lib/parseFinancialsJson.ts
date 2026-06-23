@@ -1,4 +1,4 @@
-import type { AmountRow, FinancialBundle, FinancialKpis } from '../types/financials'
+import type { AmountRow, FinancialBundle, FinancialKpis, MonthlyBundle } from '../types/financials'
 
 function isNumberArray(a: unknown): a is number[] {
   return Array.isArray(a) && a.every((x) => typeof x === 'number' && Number.isFinite(x))
@@ -117,7 +117,38 @@ export function parseFinancialsJson(raw: unknown): ParseResult {
     profitLoss: pl as AmountRow[],
     cashFlow: cf as AmountRow[],
     kpis: root.kpis,
+    monthly: parseMonthlyBundle(root.monthly),
   }
 
   return { ok: true, data }
+}
+
+function parseMonthlyBundle(raw: unknown): MonthlyBundle | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const root = raw as Record<string, unknown>
+
+  if (!Array.isArray(root.periods) || root.periods.length === 0) return undefined
+  if (!root.periods.every((p) => typeof p === 'string' && p.length > 0)) return undefined
+  const periods = root.periods as string[]
+  const n = periods.length
+
+  const bs = root.balanceSheet
+  if (!bs || typeof bs !== 'object') return undefined
+  const bso = bs as Record<string, unknown>
+  if (!Array.isArray(bso.assets) || !Array.isArray(bso.liabilitiesAndEquity)) return undefined
+  if (!bso.assets.every((r) => isAmountRow(r, n))) return undefined
+  if (!bso.liabilitiesAndEquity.every((r) => isAmountRow(r, n))) return undefined
+
+  if (!Array.isArray(root.profitLoss) || !root.profitLoss.every((r) => isAmountRow(r, n))) return undefined
+  if (!Array.isArray(root.cashFlow) || !root.cashFlow.every((r) => isAmountRow(r, n))) return undefined
+
+  return {
+    periods,
+    balanceSheet: {
+      assets: bso.assets as AmountRow[],
+      liabilitiesAndEquity: bso.liabilitiesAndEquity as AmountRow[],
+    },
+    profitLoss: root.profitLoss as AmountRow[],
+    cashFlow: root.cashFlow as AmountRow[],
+  }
 }

@@ -14,6 +14,16 @@ export type FinancialKpis = {
   freeCashFlow: number
 }
 
+export type MonthlyBundle = {
+  periods: readonly string[]
+  balanceSheet: {
+    assets: readonly AmountRow[]
+    liabilitiesAndEquity: readonly AmountRow[]
+  }
+  profitLoss: readonly AmountRow[]
+  cashFlow: readonly AmountRow[]
+}
+
 export type FinancialBundle = {
   periods: readonly string[]
   balanceSheet: {
@@ -23,4 +33,5 @@ export type FinancialBundle = {
   profitLoss: readonly AmountRow[]
   cashFlow: readonly AmountRow[]
   kpis: FinancialKpis
+  monthly?: MonthlyBundle
 }
