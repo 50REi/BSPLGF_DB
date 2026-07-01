@@ -38,9 +38,12 @@ function sliceStart(n: number, yearRange?: YearRange): number {
 function lastValue(
   rows: readonly { label: string; values: readonly number[] }[],
   label: string,
+  idx?: number,
 ): number {
   const vals = rows.find((r) => r.label === label)?.values
-  return vals ? (vals[vals.length - 1] ?? 0) : 0
+  if (!vals) return 0
+  const i = idx !== undefined ? idx : vals.length - 1
+  return vals[i] ?? 0
 }
 
 type DonutItem = { name: string; value: number; color: string }
@@ -76,7 +79,7 @@ function DonutPanel({ data, total, centerLabel }: { data: DonutItem[]; total: nu
             </Pie>
             <Tooltip
               contentStyle={donutTooltip}
-              formatter={(v: number) => [`${formatMillionYen(v)} 百万円`]}
+              formatter={(v) => [`${formatMillionYen(Number(v ?? 0))} 百万円`]}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -134,16 +137,14 @@ export function PLTrendChart({ bundle, yearRange }: Props) {
       <figcaption>PL 主要指標の推移（百万円）</figcaption>
       <div className="chart-body">
         <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={plTrendData} margin={{ top: 8, right: 60, left: 8, bottom: 0 }}>
+          <ComposedChart data={plTrendData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
             <XAxis dataKey="period" tick={AXIS_TICK} />
             <YAxis
-              yAxisId="left"
-              orientation="left"
               tick={AXIS_TICK_S}
               tickFormatter={(v) => formatMillionYen(v as number)}
               label={{
-                value: '売上高（百万円）',
+                value: '百万円',
                 angle: -90,
                 position: 'insideLeft' as const,
                 offset: 12,
@@ -151,34 +152,18 @@ export function PLTrendChart({ bundle, yearRange }: Props) {
                 fontSize: 11,
               }}
             />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tick={AXIS_TICK_S}
-              tickFormatter={(v) => formatMillionYen(v as number)}
-              label={{
-                value: '利益（百万円）',
-                angle: 90,
-                position: 'insideRight' as const,
-                offset: 12,
-                fill: '#94a3b8',
-                fontSize: 11,
-              }}
-            />
             <Tooltip contentStyle={tooltipSurface} />
             <Legend formatter={legendFmt} />
-            {/* 右軸の0ライン強調 */}
-            <ReferenceLine y={0} yAxisId="right" stroke="#94a3b8" strokeWidth={1} />
+            <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1} />
             <Bar
               dataKey="売上高"
-              yAxisId="left"
               fill="#00b4b4"
+              opacity={0.35}
               radius={[4, 4, 0, 0]}
             />
             <Line
               type="monotone"
               dataKey="営業利益"
-              yAxisId="right"
               stroke="#e8534a"
               strokeWidth={2.5}
               dot={{ r: 3, fill: '#e8534a', strokeWidth: 0 }}
@@ -187,7 +172,6 @@ export function PLTrendChart({ bundle, yearRange }: Props) {
             <Line
               type="monotone"
               dataKey="当期純利益"
-              yAxisId="right"
               stroke="#f59e0b"
               strokeWidth={2.5}
               dot={{ r: 3, fill: '#f59e0b', strokeWidth: 0 }}
@@ -238,7 +222,7 @@ export function BSBalanceChart({ bundle, yearRange }: Props) {
             />
             <Tooltip
               contentStyle={{ backgroundColor: '#243447', border: '1px solid #00b4b4', borderRadius: '8px', color: '#ffffff' }}
-              formatter={(value: number, name: string) => [`${value.toLocaleString()} 百万円`, name]}
+              formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} 百万円`, String(name)]}
               labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
             />
             <Legend formatter={legendFmt} />
@@ -295,19 +279,20 @@ export function CFActivityChart({ bundle, yearRange }: Props) {
   )
 }
 
-// ===== BSDonutChart: 最新期の資産構成・負債純資産構成ドーナツ =====
-export function BSDonutChart({ bundle }: { bundle: FinancialBundle }) {
-  const latestPeriod = bundle.periods[bundle.periods.length - 1] ?? ''
+// ===== BSDonutChart: 選択期の資産構成・負債純資産構成ドーナツ =====
+export function BSDonutChart({ bundle, periodIdx }: { bundle: FinancialBundle; periodIdx?: number }) {
+  const idx = periodIdx !== undefined ? periodIdx : bundle.periods.length - 1
+  const period = bundle.periods[idx] ?? ''
 
   const assetsData: DonutItem[] = [
-    { name: '固定資産', value: lastValue(bundle.balanceSheet.assets, '固定資産'), color: '#00b4b4' },
-    { name: '流動資産', value: lastValue(bundle.balanceSheet.assets, '流動資産'), color: '#4fd1d1' },
+    { name: '固定資産', value: lastValue(bundle.balanceSheet.assets, '固定資産', idx), color: '#00b4b4' },
+    { name: '流動資産', value: lastValue(bundle.balanceSheet.assets, '流動資産', idx), color: '#4fd1d1' },
   ].filter((d) => d.value > 0)
 
   const leData: DonutItem[] = [
-    { name: '固定負債', value: lastValue(bundle.balanceSheet.liabilitiesAndEquity, '固定負債'), color: '#a78bfa' },
-    { name: '流動負債', value: lastValue(bundle.balanceSheet.liabilitiesAndEquity, '流動負債'), color: '#e8534a' },
-    { name: '純資産',   value: lastValue(bundle.balanceSheet.liabilitiesAndEquity, '純資産'),   color: '#10b981' },
+    { name: '固定負債', value: lastValue(bundle.balanceSheet.liabilitiesAndEquity, '固定負債', idx), color: '#a78bfa' },
+    { name: '流動負債', value: lastValue(bundle.balanceSheet.liabilitiesAndEquity, '流動負債', idx), color: '#e8534a' },
+    { name: '純資産',   value: lastValue(bundle.balanceSheet.liabilitiesAndEquity, '純資産',   idx), color: '#10b981' },
   ].filter((d) => d.value > 0)
 
   const assetsTotal = assetsData.reduce((s, d) => s + d.value, 0)
@@ -315,7 +300,7 @@ export function BSDonutChart({ bundle }: { bundle: FinancialBundle }) {
 
   return (
     <figure className="chart-card">
-      <figcaption>BS 構成比（{latestPeriod}）</figcaption>
+      <figcaption>BS 構成比（{period}）</figcaption>
       <div className="donut-row">
         <DonutPanel data={assetsData} total={assetsTotal} centerLabel="資産構成" />
         <DonutPanel data={leData}     total={leTotal}     centerLabel="負債構成" />
@@ -324,33 +309,54 @@ export function BSDonutChart({ bundle }: { bundle: FinancialBundle }) {
   )
 }
 
-// ===== PLDonutChart: 最新期の費用・利益構成ドーナツ =====
-export function PLDonutChart({ bundle }: { bundle: FinancialBundle }) {
-  const latestPeriod = bundle.periods[bundle.periods.length - 1] ?? ''
-
-  const cogs      = lastValue(bundle.profitLoss, '売上原価')
-  const sga       = lastValue(bundle.profitLoss, '販売費及び一般管理費')
-  const opProfit  = lastValue(bundle.profitLoss, '営業利益')
+// ===== PLDonutChart: 直近2期の費用・利益構成ドーナツ =====
+function buildPLDonutData(bundle: FinancialBundle, idx: number) {
+  const period    = bundle.periods[idx] ?? ''
+  const cogs      = lastValue(bundle.profitLoss, '売上原価', idx)
+  const sga       = lastValue(bundle.profitLoss, '販売費及び一般管理費', idx)
+  const opProfit  = lastValue(bundle.profitLoss, '営業利益', idx)
   const isLoss    = opProfit < 0
-
   const data: DonutItem[] = [
-    { name: '売上原価', value: cogs,                            color: '#e8534a' },
-    { name: '販管費',   value: sga,                             color: '#a78bfa' },
+    { name: '売上原価', value: cogs,      color: '#e8534a' },
+    { name: '販管費',   value: sga,       color: '#a78bfa' },
     ...(isLoss ? [] : [{ name: '営業利益', value: opProfit, color: '#00b4b4' }]),
   ].filter((d) => d.value > 0)
-
   const total = data.reduce((s, d) => s + d.value, 0)
+  return { period, data, total, isLoss, opProfit }
+}
+
+export function PLDonutChart({ bundle }: { bundle: FinancialBundle }) {
+  const lastIdx = bundle.periods.length - 1
+  const prevIdx = lastIdx - 1
+  const hasPrev = prevIdx >= 0
+
+  const curr = buildPLDonutData(bundle, lastIdx)
+  const prev = hasPrev ? buildPLDonutData(bundle, prevIdx) : null
 
   return (
     <figure className="chart-card">
-      <figcaption>PL 費用構成（{latestPeriod}）</figcaption>
-      <div className="donut-row donut-row-single">
-        <DonutPanel data={data} total={total} centerLabel="費用構成" />
-        {isLoss && (
-          <div className="donut-loss-note">
-            <p>営業損失<br />{formatMillionYen(Math.abs(opProfit))} 百万円</p>
+      <figcaption>PL 費用構成{hasPrev ? `（${prev!.period} → ${curr.period}）` : `（${curr.period}）`}</figcaption>
+      <div className={`donut-row${hasPrev ? '' : ' donut-row-single'}`}>
+        {prev && (
+          <div className="donut-col">
+            <p className="donut-period-label">{prev.period}</p>
+            <DonutPanel data={prev.data} total={prev.total} centerLabel="費用構成" />
+            {prev.isLoss && (
+              <div className="donut-loss-note">
+                <p>営業損失<br />{formatMillionYen(Math.abs(prev.opProfit))} 百万円</p>
+              </div>
+            )}
           </div>
         )}
+        <div className="donut-col">
+          {hasPrev && <p className="donut-period-label">{curr.period}</p>}
+          <DonutPanel data={curr.data} total={curr.total} centerLabel="費用構成" />
+          {curr.isLoss && (
+            <div className="donut-loss-note">
+              <p>営業損失<br />{formatMillionYen(Math.abs(curr.opProfit))} 百万円</p>
+            </div>
+          )}
+        </div>
       </div>
     </figure>
   )

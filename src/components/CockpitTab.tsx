@@ -43,6 +43,36 @@ function debtRepaymentLevel(years: number): SignalLevel {
   return years > 3 ? 'green' : years >= 1 ? 'yellow' : 'red'
 }
 
+// ===== ファンダメンタル判定 =====
+type FundJudge = '◎' | '○' | '△' | '✕'
+
+function fundColor(j: FundJudge | null): string {
+  if (j === null)              return '#94a3b8'
+  if (j === '◎' || j === '○') return '#00b4b4'
+  if (j === '△')               return '#f59e0b'
+  return '#e8534a'
+}
+
+function roeJudge(v: number): FundJudge {
+  if (v >= 10) return '◎'
+  if (v >= 5)  return '○'
+  if (v >= 0)  return '△'
+  return '✕'
+}
+
+function roaJudge(v: number): FundJudge {
+  if (v >= 5) return '◎'
+  if (v >= 2) return '○'
+  if (v >= 0) return '△'
+  return '✕'
+}
+
+function icrJudge(v: number): FundJudge {
+  if (v >= 3) return '◎'
+  if (v >= 1) return '○'
+  return '✕'
+}
+
 const GAUGE_COLOR: Record<SignalLevel, string> = {
   green:  '#00b4b4',
   yellow: '#f59e0b',
@@ -120,9 +150,6 @@ const tooltipStyle = {
   fontSize: '0.75rem',
 }
 
-const legendFmt = (v: string) => (
-  <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{v}</span>
-)
 
 export function CockpitTab({ bundle }: Props) {
   const { balanceSheet, profitLoss, cashFlow, periods } = bundle
@@ -139,6 +166,9 @@ export function CockpitTab({ bundle }: Props) {
   const longDebt      = useMemo(() => findValues(balanceSheet.liabilitiesAndEquity, '長期借入金'),[balanceSheet])
   const shortDebt     = useMemo(() => findValues(balanceSheet.liabilitiesAndEquity, '短期借入金'),[balanceSheet])
   const equity        = useMemo(() => findValues(balanceSheet.liabilitiesAndEquity, '純資産'),    [balanceSheet])
+  const netProfit     = useMemo(() => findValues(profitLoss, '当期純利益'),  [profitLoss])
+  const depreciation  = useMemo(() => findValues(profitLoss, '減価償却費'),  [profitLoss])
+  const interestExp   = useMemo(() => findValues(profitLoss, '支払利息'),    [profitLoss])
 
   // 年間返済額: 複数ラベルで検索 → 見つからなければ財務CFの絶対値で代替
   const annualRepay = useMemo(() => {
@@ -168,6 +198,28 @@ export function CockpitTab({ bundle }: Props) {
 
   // 借入返済余力 = 営業CF ÷ 年間返済額（年数カバレッジ）
   const repayYears = annualRepay > 0 ? latestOpCF / annualRepay : 999
+
+  // ===== ファンダメンタル指標 =====
+  const roeNegativeEquity = equity.length > 0 && last(equity) <= 0
+
+  const roeVal: number | null =
+    netProfit.length > 0 && equity.length > 0 && last(equity) > 0
+      ? (last(netProfit) / last(equity)) * 100
+      : null
+
+  const roaVal: number | null =
+    netProfit.length > 0 && last(totalAssets) !== 0
+      ? (last(netProfit) / last(totalAssets)) * 100
+      : null
+
+  const deprVal: number | null = depreciation.length > 0 ? last(depreciation) : null
+  const ebitdaVal = deprVal !== null ? latestOpProfit + deprVal : latestOpProfit
+  const ebitdaApprox = deprVal === null
+
+  const intExpVal: number | null =
+    interestExp.length > 0 && last(interestExp) !== 0 ? last(interestExp) : null
+  const icrVal: number | null =
+    intExpVal !== null ? latestOpProfit / Math.abs(intExpVal) : null
 
   const latestPeriod = periods[periods.length - 1] ?? '最新期'
 
@@ -260,6 +312,39 @@ export function CockpitTab({ bundle }: Props) {
       color: revenueYoY >= 0 ? '#00b4b4' : '#e8534a',
       tooltip: '前期比の売上高増減率。\n計算式：(当期売上 - 前期売上) ÷ 前期売上 × 100\nプラスが成長トレンド、マイナスは縮小傾向。',
     },
+    // ── ファンダメンタル指標 ──
+    {
+      label: 'ROE',
+      value: roeNegativeEquity ? '算出不可' : roeVal !== null ? `${roeVal.toFixed(1)}%` : 'データなし',
+      smallValue: roeNegativeEquity,
+      unit:  roeNegativeEquity ? '' : roeVal !== null ? roeJudge(roeVal) : '',
+      color: roeNegativeEquity ? '#94a3b8' : roeVal !== null ? fundColor(roeJudge(roeVal)) : '#94a3b8',
+      note:  roeNegativeEquity ? '債務超過' : undefined,
+      tooltip: '自己資本利益率。株主が投じた資本に対して\nどれだけ利益を生んだかを示す。\n計算式：当期純利益 ÷ 純資産 × 100\n目安：10%以上◎ / 5-10%○ / 5%未満△\n※純資産がマイナス（債務超過）の場合は算出不可と表示されます',
+    },
+    {
+      label: 'ROA',
+      value: roaVal !== null ? `${roaVal.toFixed(1)}%` : 'データなし',
+      unit:  roaVal !== null ? roaJudge(roaVal) : '',
+      color: roaVal !== null ? fundColor(roaJudge(roaVal)) : '#94a3b8',
+      tooltip: '総資産利益率。保有する全資産を使って\nどれだけ効率的に利益を生んだかを示す。\n計算式：当期純利益 ÷ 総資産 × 100\n目安：5%以上◎ / 2-5%○ / 2%未満△',
+    },
+    {
+      label: 'EBITDA',
+      value: formatMillionYen(ebitdaVal),
+      unit: '百万円',
+      note: ebitdaApprox ? '※減価償却費なし' : undefined,
+      color: ebitdaVal >= 0 ? '#00b4b4' : '#e8534a',
+      tooltip: '利払い・税引き・償却前利益。\n事業の実質的なキャッシュ創出力を示す。\nM&A・銀行融資の評価でよく使われる指標。\n計算式：営業利益 + 減価償却費',
+    },
+    {
+      label: 'ICR',
+      value: icrVal !== null ? `${icrVal.toFixed(1)}倍` : 'データなし',
+      smallValue: icrVal === null,
+      unit:  icrVal !== null ? icrJudge(icrVal) : '',
+      color: icrVal !== null ? fundColor(icrJudge(icrVal)) : '#94a3b8',
+      tooltip: '利息支払い余力。\n営業利益が支払利息の何倍あるかを示す。\n計算式：営業利益 ÷ 支払利息\n目安：3倍以上◎ / 1-3倍○ / 1倍未満は危険',
+    },
   ]
 
   return (
@@ -312,10 +397,13 @@ export function CockpitTab({ bundle }: Props) {
               <div key={item.label} className="cockpit-highlight-card">
                 <div className="cockpit-highlight-tooltip">{item.tooltip}</div>
                 <p className="cockpit-highlight-label">{item.label}</p>
-                <p className="cockpit-highlight-value" style={{ color: item.color }}>
+                <p className="cockpit-highlight-value" style={{ color: item.color, ...((item as any).smallValue ? { fontSize: '0.75rem', fontWeight: 500, lineHeight: '1.2' } : {}) }}>
                   {item.value}
                   {item.unit && <span className="cockpit-highlight-unit">{item.unit}</span>}
                 </p>
+                {'note' in item && item.note && (
+                  <p className="cockpit-highlight-note">{item.note}</p>
+                )}
               </div>
             ))}
           </div>

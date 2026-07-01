@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   PolarAngleAxis,
   PolarGrid,
@@ -10,6 +10,7 @@ import {
   Legend,
 } from 'recharts'
 import type { ImprovementItem } from '../data/memorialFinancials'
+import { LS_KEY, LS_KEY_COMPANY } from './ApiKeySetup'
 import type { FinancialBundle } from '../types/financials'
 import {
   buildDefaultSliderParams,
@@ -201,6 +202,92 @@ export function StrategyTab({ bundle }: Props) {
   const optimizedBe = findBreakEvenYear(optimized)
   const totalEffect = improvements.reduce((s, i) => s + i.annualEffect, 0)
 
+  const [industry, setIndustry] = useState('')
+  const [competitor, setCompetitor] = useState('')
+  const [market, setMarket] = useState('')
+  const [strength, setStrength] = useState('')
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null)
+
+  const lastOf = (rows: readonly { label: string; values: readonly number[] }[], label: string) =>
+    rows.find((r) => r.label === label)?.values.at(-1) ?? 0
+
+  const handleAnalysis = useCallback(async () => {
+    const apiKey = localStorage.getItem(LS_KEY)
+    if (!apiKey) { alert('APIキーを設定してください'); return }
+    const companyName = localStorage.getItem(LS_KEY_COMPANY) ?? '対象企業'
+    const revenue   = lastOf(bundle.profitLoss, '売上高')
+    const opProfit  = lastOf(bundle.profitLoss, '営業利益')
+    const opMargin  = revenue > 0 ? (opProfit / revenue * 100).toFixed(1) : '0.0'
+    const equity    = lastOf(bundle.balanceSheet.liabilitiesAndEquity, '純資産')
+    const totalAssets = lastOf(bundle.balanceSheet.assets, '資産合計')
+    const equityRatio = totalAssets > 0 ? (equity / totalAssets * 100).toFixed(1) : '0.0'
+    const longDebt  = lastOf(bundle.balanceSheet.liabilitiesAndEquity, '長期借入金')
+    const latestPeriod = bundle.periods.at(-1) ?? '最新期'
+
+    setAnalysisLoading(true)
+    setAnalysisResult(null)
+    try {
+      const isProd = window.location.hostname !== 'localhost'
+      const apiUrl = isProd ? '/api/claude' : 'https://api.anthropic.com/v1/messages'
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(!isProd ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : {}),
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2500,
+          system: 'あなたは中小企業の経営戦略コンサルタントです。財務データと業界情報を元に、実践的なSWOT分析と3C分析を提供してください。日本語で、経営者にわかりやすく記述してください。',
+          messages: [{
+            role: 'user',
+            content: `以下の情報を元にSWOT分析と3C分析を行ってください。
+
+【会社情報】
+会社名：${companyName}
+対象期：${latestPeriod}
+業種：${industry || '未入力'}
+主な競合：${competitor || '未入力'}
+市場環境：${market || '未入力'}
+自社の強み補足：${strength || '未入力'}
+
+【財務データ】
+売上高：${revenue}百万円
+営業利益率：${opMargin}%
+自己資本比率：${equityRatio}%
+長期借入金：${longDebt}百万円
+
+以下のHTML形式で出力してください（bodyタグ不要）：
+<h2>SWOT分析</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0">
+  <div style="background:#dcfce7;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#14532d;font-weight:700;margin-bottom:8px">S（強み）</h3><ul style="padding-left:20px;line-height:2">強みを3〜5点</ul></div>
+  <div style="background:#fee2e2;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#7f1d1d;font-weight:700;margin-bottom:8px">W（弱み）</h3><ul style="padding-left:20px;line-height:2">弱みを3〜5点</ul></div>
+  <div style="background:#dbeafe;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#1e3a8a;font-weight:700;margin-bottom:8px">O（機会）</h3><ul style="padding-left:20px;line-height:2">機会を3〜5点</ul></div>
+  <div style="background:#fef9c3;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#713f12;font-weight:700;margin-bottom:8px">T（脅威）</h3><ul style="padding-left:20px;line-height:2">脅威を3〜5点</ul></div>
+</div>
+<h2>3C分析</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:12px 0">
+  <div style="background:#f3e8ff;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#581c87;font-weight:700;margin-bottom:8px">Customer（顧客）</h3><p style="line-height:1.8">顧客の特性・ニーズを記述</p></div>
+  <div style="background:#ffedd5;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#7c2d12;font-weight:700;margin-bottom:8px">Competitor（競合）</h3><p style="line-height:1.8">競合の特性・脅威を記述</p></div>
+  <div style="background:#e0f2fe;border-radius:8px;padding:16px;color:#1a1a1a"><h3 style="color:#0c4a6e;font-weight:700;margin-bottom:8px">Company（自社）</h3><p style="line-height:1.8">自社の強み・差別化を記述</p></div>
+</div>
+<h2>戦略提言</h2>
+<p style="line-height:1.8">SWOT×3Cを踏まえた具体的な戦略アクションを3点記述</p>`
+          }]
+        })
+      })
+      const data = await res.json()
+      const content = data.content?.filter((b: {type: string}) => b.type === 'text')
+        .map((b: {text: string}) => b.text).join('') ?? ''
+      setAnalysisResult(content)
+    } catch {
+      alert('分析に失敗しました')
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }, [bundle, industry, competitor, market, strength])
+
   return (
     <div className="strategy-tab panel-grid">
       <section className="strategy-section">
@@ -307,6 +394,52 @@ export function StrategyTab({ bundle }: Props) {
             )}
           </div>
         </div>
+      </section>
+
+      <section className="strategy-section">
+        <h2 className="section-title">🎯 SWOT・3C 戦略分析</h2>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:'12px', marginBottom:'16px' }}>
+          <div>
+            <label style={{ fontSize:'0.8rem', color:'var(--text)', display:'block', marginBottom:4 }}>業種</label>
+            <input value={industry} onChange={e => setIndustry(e.target.value)} placeholder="例：葬祭業" style={{ width:'100%', maxWidth:'530px', padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-h)', fontSize:'0.9rem' }} />
+          </div>
+          <div>
+            <label style={{ fontSize:'0.8rem', color:'var(--text)', display:'block', marginBottom:4 }}>主な競合</label>
+            <input value={competitor} onChange={e => setCompetitor(e.target.value)} placeholder="例：河井葬儀社" style={{ width:'100%', maxWidth:'530px', padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-h)', fontSize:'0.9rem' }} />
+          </div>
+          <div>
+            <label style={{ fontSize:'0.8rem', color:'var(--text)', display:'block', marginBottom:4 }}>市場環境</label>
+            <input value={market} onChange={e => setMarket(e.target.value)} placeholder="例：高齢化進展・直葬増加・価格競争激化" style={{ width:'100%', maxWidth:'530px', padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-h)', fontSize:'0.9rem' }} />
+          </div>
+          <div>
+            <label style={{ fontSize:'0.8rem', color:'var(--text)', display:'block', marginBottom:4 }}>自社の強み（補足）</label>
+            <input value={strength} onChange={e => setStrength(e.target.value)} placeholder="例：納棺の義・相続内製化・宅建士在籍" style={{ width:'100%', maxWidth:'530px', padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-h)', fontSize:'0.9rem' }} />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleAnalysis}
+          disabled={analysisLoading}
+          style={{ padding:'10px 24px', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, fontWeight:600, cursor:'pointer', opacity: analysisLoading ? 0.6 : 1 }}
+        >
+          {analysisLoading ? '🔄 分析中...' : '🎯 SWOT・3C分析を実行'}
+        </button>
+        {analysisResult && (
+          <div style={{ marginTop:20 }}>
+            <div dangerouslySetInnerHTML={{ __html: analysisResult }} style={{ color:'var(--text-h)' }} />
+            <button
+              type="button"
+              onClick={() => {
+                const companyName = localStorage.getItem(LS_KEY_COMPANY) ?? '対象企業'
+                const today = new Date().toLocaleDateString('ja-JP')
+                const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>SWOT・3C分析 - ${companyName}</title><style>body{font-family:'Helvetica Neue',Arial,'Hiragino Sans',sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#1a1a1a}h1{color:#7c3aed;border-bottom:3px solid #7c3aed;padding-bottom:12px}h2{color:#7c3aed;margin-top:24px}h3{margin-bottom:8px}.footer{margin-top:40px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:8pt;color:#94a3b8;text-align:right}@media print{body{padding:20px}}</style></head><body><h1>SWOT・3C 戦略分析レポート</h1><p style="color:#64748b">${companyName}　｜　作成日：${today}</p>${analysisResult}<div class="footer">Powered by FinanceScope / 5web.jp</div></body></html>`
+                const w = window.open('', '_blank')
+                if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 800) }
+              }}
+              style={{ marginTop:12, padding:'8px 20px', background:'#00b4b4', color:'#fff', border:'none', borderRadius:6, fontWeight:600, cursor:'pointer' }}
+            >🖨️ 印刷 / PDF保存</button>
+          </div>
+        )}
       </section>
     </div>
   )

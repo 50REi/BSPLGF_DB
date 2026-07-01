@@ -15,8 +15,8 @@
 }
 
 .dash-title {
-  font-size: 1.75rem;
-  letter-spacing: -0.02em;
+  font-size: 2.25rem;
+  letter-spacing: -0.03em;
   margin: 0 0 0.35rem;
   color: var(--text-h);
 }
@@ -320,6 +320,18 @@
   width: 44px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+.donut-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.donut-period-label {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin: 0;
+  font-weight: 600;
 }
 .donut-loss-note {
   display: flex;
@@ -1000,13 +1012,13 @@
 
 .cockpit-highlight-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(100px, 1fr));
   gap: 0.5rem;
 }
 
 @media (max-width: 1100px) {
   .cockpit-highlight-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(100px, 1fr));
   }
 }
 
@@ -1040,6 +1052,13 @@
   font-weight: 400;
   color: var(--text);
   margin-left: 2px;
+}
+
+.cockpit-highlight-note {
+  margin: 0.2rem 0 0;
+  font-size: 0.58rem;
+  color: #94a3b8;
+  line-height: 1.3;
 }
 
 /* ハイライトカード ツールチップ */
@@ -1076,11 +1095,13 @@
 .cockpit-highlight-card:hover .cockpit-highlight-tooltip {
   visibility: visible;
 }
-.cockpit-highlight-card:nth-child(1) .cockpit-highlight-tooltip {
+.cockpit-highlight-card:nth-child(1) .cockpit-highlight-tooltip,
+.cockpit-highlight-card:nth-child(6) .cockpit-highlight-tooltip {
   left: 0;
   transform: translateX(0);
 }
-.cockpit-highlight-card:nth-child(1) .cockpit-highlight-tooltip::after {
+.cockpit-highlight-card:nth-child(1) .cockpit-highlight-tooltip::after,
+.cockpit-highlight-card:nth-child(6) .cockpit-highlight-tooltip::after {
   left: 20px;
   transform: none;
 }
@@ -1222,6 +1243,31 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.btn-report {
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #00b4b4;
+  background: transparent;
+  color: #00b4b4;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.btn-report:hover:not(:disabled) {
+  background: rgba(0, 180, 180, 0.1);
+}
+.btn-report:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .btn-upload-pdf {
@@ -1678,4 +1724,581 @@
 .csv-sample-btn:hover {
   background: #00b4b4;
   color: #fff;
+}
+
+/* ===== BSTab 2カラムレイアウト ===== */
+
+.bs-tab-2col {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── 期間ナビ（単一期間モード） ── */
+.bs-period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bs-period-arrows {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bs-period-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-h);
+  min-width: 7rem;
+  text-align: center;
+}
+
+.bs-arrow-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.6rem;
+  transition: background 0.12s, color 0.12s;
+}
+.bs-arrow-btn:hover:not(:disabled) {
+  background: rgba(0,180,180,0.12);
+  color: #00b4b4;
+  border-color: #00b4b4;
+}
+.bs-arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.bs-show-all-btn {
+  background: transparent;
+  border: 1px solid #00b4b4;
+  border-radius: 6px;
+  color: #00b4b4;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.bs-show-all-btn:hover:not(:disabled) {
+  background: #00b4b4;
+  color: #fff;
+}
+.bs-show-all-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* ── 比較モードナビ ── */
+.bs-compare-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.bs-compare-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.bs-ctab {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0.28rem 0.55rem;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.bs-ctab:hover {
+  background: rgba(0,180,180,0.1);
+  color: #00b4b4;
+  border-color: rgba(0,180,180,0.4);
+}
+.bs-ctab.active {
+  background: rgba(0,180,180,0.18);
+  border-color: #00b4b4;
+  color: #00b4b4;
+  font-weight: 700;
+}
+.bs-ctab-range {
+  border-color: rgba(0,180,180,0.3);
+  color: #4fd1d1;
+}
+.bs-ctab-range.active {
+  background: rgba(0,180,180,0.22);
+  border-color: #00b4b4;
+  color: #00b4b4;
+}
+.bs-ctab-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1.1rem;
+  background: var(--border);
+  margin: 0 0.15rem;
+  align-self: center;
+}
+
+.bs-back-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.75rem;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.bs-back-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── 2カラムグリッド ── */
+.bs-col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .bs-col-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── 左カラム: グラフ ── */
+.bs-chart-card {
+  position: sticky;
+  top: 1rem;
+  cursor: crosshair;
+}
+
+.bs-chart-hint {
+  margin: 0;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  border-top: 2px solid;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.bs-hint-muted {
+  color: #64748b;
+  font-size: 0.67rem;
+}
+
+/* ── 右カラム: テーブル ── */
+.bs-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.bs-detail-wrap {
+  overflow-x: auto;
+}
+
+/* ── テーブル行ハイライト ── */
+.bs-row-hl {
+  background: rgba(var(--hl-rgb, 0,180,180), 0.08);
+  border-left: 3px solid var(--hl-color, #00b4b4);
+}
+.bs-row-hl .fin-label,
+.bs-row-hl .fin-num {
+  color: var(--text-h);
+}
+
+/* ── 前期比列 ── */
+.bs-yoy-pos {
+  color: #10b981;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.bs-yoy-neg {
+  color: #e8534a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.bs-yoy-na {
+  color: #64748b;
+}
+
+/* 比較モード複数期間テーブル */
+.bs-multi-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── 左右対照テーブル ── */
+.bs-paired-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.bs-paired-divider {
+  background: var(--border);
+  align-self: stretch;
+}
+
+.bs-expandable-section {
+  padding: 0 0.65rem;
+  overflow-x: auto;
+  min-width: 0;
+}
+.bs-expandable-section:first-child {
+  padding-left: 0;
+}
+.bs-expandable-section:last-child {
+  padding-right: 0;
+}
+
+/* fin-table の min-width を対照表内で緩める */
+.bs-paired-table {
+  min-width: 200px;
+}
+
+/* 展開可能行 */
+.bs-expandable-row {
+  cursor: pointer;
+  user-select: none;
+}
+.bs-expandable-row:hover {
+  background: rgba(0, 180, 180, 0.06);
+}
+.bs-expandable-row:hover .fin-label {
+  color: #4fd1d1;
+}
+
+.bs-expand-icon {
+  display: inline-block;
+  font-size: 0.6rem;
+  margin-right: 0.35rem;
+  color: #94a3b8;
+  vertical-align: middle;
+  transition: transform 0.15s;
+}
+
+/* ── 財務安全性指標 ── */
+.bs-metrics-section {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.bs-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .bs-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ツールチップ位置補正（3列グリッド） */
+/* 左端列（1, 4番目） */
+.bs-metrics-grid .cockpit-highlight-card:nth-child(1) .cockpit-highlight-tooltip,
+.bs-metrics-grid .cockpit-highlight-card:nth-child(4) .cockpit-highlight-tooltip {
+  left: 0;
+  transform: translateX(0);
+}
+.bs-metrics-grid .cockpit-highlight-card:nth-child(1) .cockpit-highlight-tooltip::after,
+.bs-metrics-grid .cockpit-highlight-card:nth-child(4) .cockpit-highlight-tooltip::after {
+  left: 20px;
+  transform: none;
+}
+/* 右端列（3, 6番目） */
+.bs-metrics-grid .cockpit-highlight-card:nth-child(3) .cockpit-highlight-tooltip,
+.bs-metrics-grid .cockpit-highlight-card:nth-child(6) .cockpit-highlight-tooltip {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+.bs-metrics-grid .cockpit-highlight-card:nth-child(3) .cockpit-highlight-tooltip::after,
+.bs-metrics-grid .cockpit-highlight-card:nth-child(6) .cockpit-highlight-tooltip::after {
+  left: auto;
+  right: 20px;
+  transform: none;
+}
+
+/* ===== ApiKeySetup ===== */
+.apikey-fullscreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--bg);
+}
+
+.apikey-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 480px;
+  padding: 2.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.apikey-card-icon {
+  font-size: 2.5rem;
+  text-align: center;
+}
+
+.apikey-card-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-h);
+  text-align: center;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.apikey-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.apikey-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.apikey-label {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.apikey-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.apikey-input {
+  width: 100%;
+  padding: 0.6rem 2.8rem 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 0.9rem;
+  font-family: 'Courier New', Courier, monospace;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.apikey-input:focus {
+  border-color: #00b4b4;
+  box-shadow: 0 0 0 3px rgba(0, 180, 180, 0.18);
+}
+
+.apikey-input-err {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}
+
+.apikey-toggle-btn {
+  position: absolute;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.apikey-toggle-btn:hover {
+  opacity: 1;
+}
+
+.apikey-error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #ef4444;
+}
+
+.apikey-link {
+  font-size: 0.85rem;
+  color: #00b4b4;
+  text-decoration: none;
+  align-self: flex-start;
+  transition: opacity 0.15s;
+}
+
+.apikey-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.apikey-submit-btn {
+  padding: 0.7rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  background: #00b4b4;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  letter-spacing: 0.01em;
+}
+
+.apikey-submit-btn:hover {
+  background: #009999;
+  box-shadow: 0 2px 10px rgba(0, 180, 180, 0.4);
+}
+
+/* ===== Settings gear button ===== */
+.btn-settings {
+  position: relative;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.btn-settings:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.btn-settings-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid var(--bg);
+  flex-shrink: 0;
+}
+
+/* ===== 全クリアボタン ===== */
+.btn-clear-all {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1.5px solid #ef4444;
+  background: transparent;
+  color: #ef4444;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-clear-all:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* ===== 蓄積期リスト ===== */
+.period-list-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.25rem;
+  flex-wrap: wrap;
+}
+
+.period-list-label {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.period-tags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.period-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--accent-bg);
+  font-size: 0.78rem;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.period-tag-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.period-tag-del:hover {
+  opacity: 1;
 }

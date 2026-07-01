@@ -4,10 +4,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { sampleFinancialBundle } from '../data/sampleFinancials'
+import {
+  countNewPeriods,
+  deletePeriod as deletePeriodUtil,
+  mergeBundle,
+} from '../lib/mergeBundle'
 import { parseFinancialsJson } from '../lib/parseFinancialsJson'
 import { parseCsv } from '../lib/parseCsv'
 import type { FinancialBundle } from '../types/financials'
@@ -27,6 +33,10 @@ type Ctx = {
   csvStatus: 'idle' | 'success' | 'error'
   csvFileName: string
   csvError: string
+  clearAll: () => void
+  deletePeriod: (period: string) => void
+  mergeWarning: string | null
+  clearMergeWarning: () => void
 }
 
 const FinancialDataContext = createContext<Ctx | null>(null)
@@ -98,17 +108,17 @@ const USER_PROMPT = `この財務諸表PDFから以下のJSON形式でデータ�
     { "label": "期末残高", "values": [数値, 数値, 数値], "emphasis": true }
   ],
   "kpis": {
-    "revenueGrowthYoY": 直近期の前年比売上成長率（%小数第1位の数値のみ）,
+    "revenueGrowthYoY": 直近期の前年比売上成長率（%小数第1位の数値のみ。前年データがない場合は0）,
     "operatingMarginPct": 直近期の営業利益率（%小数第1位の数値のみ）,
     "equityRatioPct": 直近期の自己資本比率（%小数第1位の数値のみ）,
     "freeCashFlow": 直近期のFCF（営業CF＋投資CF、百万円整数）
-  }
-}`
+  }}`
 
 export function FinancialDataProvider({ children }: { children: ReactNode }) {
   const [bundle, setBundle] = useState<FinancialBundle>(sampleFinancialBundle)
   const [dataSource, setDataSource] = useState<FinancialDataSource>('sample')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [mergeWarning, setMergeWarning] = useState<string | null>(null)
 
   // PDF関連のstate
   const [pdfStatus, setPdfStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -120,6 +130,12 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
   const [csvStatus, setCsvStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [csvFileName, setCsvFileName] = useState('')
   const [csvError, setCsvError] = useState('')
+
+  // useCallback 内の非同期処理から最新 state を読むための ref
+  const bundleRef = useRef<FinancialBundle>(bundle)
+  const dataSourceRef = useRef<FinancialDataSource>(dataSource)
+  useEffect(() => { bundleRef.current = bundle }, [bundle])
+  useEffect(() => { dataSourceRef.current = dataSource }, [dataSource])
 
   // 起動時にfinancials.jsonを読み込む（既存ロジックそのまま）
   useEffect(() => {
@@ -162,11 +178,30 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // ===== 全クリア =====
+  const clearAll = useCallback(() => {
+    setBundle(sampleFinancialBundle)
+    setDataSource('sample')
+  }, [])
+
+  // ===== 個別期削除 =====
+  const deletePeriod = useCallback((period: string) => {
+    const newBundle = deletePeriodUtil(bundleRef.current, period)
+    if (newBundle.periods.length === 0) {
+      setBundle(sampleFinancialBundle)
+      setDataSource('sample')
+    } else {
+      setBundle(newBundle)
+    }
+  }, [])
+
+  const clearMergeWarning = useCallback(() => setMergeWarning(null), [])
+
   // ===== PDF読み込み関数 =====
   const loadFromPdf = useCallback(async (file: File) => {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    const apiKey = localStorage.getItem('anthropic_api_key') ?? import.meta.env.VITE_ANTHROPIC_API_KEY
     if (!apiKey) {
-      setPdfError('APIキーが未設定です。.envにVITE_ANTHROPIC_API_KEYを追加してください。')
+      setPdfError('APIキーが未設定です。ヘッダーの⚙️ボタンからAPIキーを設定してください。')
       setPdfStatus('error')
       return
     }
@@ -195,13 +230,15 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
         reader.readAsDataURL(file)
       })
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const isProd = window.location.hostname !== 'localhost'
+      const apiUrl = isProd ? '/api/claude' : 'https://api.anthropic.com/v1/messages'
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
+          ...(window.location.hostname === 'localhost' ? {'anthropic-dangerous-direct-browser-access': 'true'} : {}),
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
@@ -241,9 +278,36 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
       const parsed = parseFinancialsJson(rawJson)
       if (!parsed.ok) throw new Error(parsed.errors.join(' / '))
 
+      // ===== 期数チェック（マージ前） =====
+      const currentBundle = bundleRef.current
+      const isSample = dataSourceRef.current !== 'pdf'
+
+      if (!isSample) {
+        const newCount = countNewPeriods(currentBundle, parsed.data)
+        const totalAfterMerge = currentBundle.periods.length + newCount
+
+        if (totalAfterMerge > 20) {
+          clearInterval(progressTimer)
+          setPdfProgress(0)
+          setPdfStatus('idle')
+          setMergeWarning(
+            'error:期数上限（20期）を超えます。古い期を削除してから追加してください。'
+          )
+          return
+        }
+
+        if (totalAfterMerge === 10) {
+          setMergeWarning('warn:分析の目安は5〜10期です。引き続き追加できます。')
+        }
+      }
+
+      const newBundle = isSample
+        ? parsed.data
+        : mergeBundle(currentBundle, parsed.data)
+
       clearInterval(progressTimer)
       setPdfProgress(100)
-      setBundle(parsed.data)
+      setBundle(newBundle)
       setDataSource('pdf')
       setLoadError(null)
 
@@ -293,9 +357,11 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
       bundle, dataSource, loadError,
       loadFromPdf, pdfStatus, pdfFileName, pdfError, pdfProgress,
       loadFromCsv, csvStatus, csvFileName, csvError,
+      clearAll, deletePeriod, mergeWarning, clearMergeWarning,
     }),
     [bundle, dataSource, loadError, loadFromPdf, pdfStatus, pdfFileName, pdfError, pdfProgress,
-     loadFromCsv, csvStatus, csvFileName, csvError],
+     loadFromCsv, csvStatus, csvFileName, csvError,
+     clearAll, deletePeriod, mergeWarning, clearMergeWarning],
   )
 
   return (

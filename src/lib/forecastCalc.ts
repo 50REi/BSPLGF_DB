@@ -84,7 +84,7 @@ export function buildOptimizedParams(base: ForecastBase): SliderParams {
     costRate:         Math.max(0.25, base.costRate - 0.02),
     laborGrowth:      0.005,
     debtRepayment:    base.annualRepayment * 0.85,
-    otherExpenseRate: Math.max(0.55, base.otherExpenseRate - 0.03),
+    otherExpenseRate: Math.max(0.05, base.otherExpenseRate - 0.03),
   }
 }
 

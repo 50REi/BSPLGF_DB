@@ -4,6 +4,7 @@ import { kpiGlossary } from '../data/kpiGlossary'
 import { formatMillionYen } from '../lib/format'
 import type { FinancialBundle } from '../types/financials'
 import { AmountTable } from './AmountTable'
+import { ApiKeySetup, LS_KEY, LS_KEY_COMPANY } from './ApiKeySetup'
 import { BepSection } from './BepSection'
 import { CockpitTab } from './CockpitTab'
 import { ForecastTab } from './ForecastTab'
@@ -11,9 +12,8 @@ import { KpiCard } from './KpiCard'
 import { StrategyTab } from './StrategyTab'
 import { ToastContainer, type ToastItem } from './Toast'
 import { UploadModal } from './UploadModal'
+import { BSTab } from './BSTab'
 import {
-  BSBalanceChart,
-  BSDonutChart,
   CFActivityChart,
   PLDonutChart,
   PLTrendChart,
@@ -100,15 +100,18 @@ export function FinancialDashboard() {
   const [granularity, setGranularity] = useState<Granularity>('annual')
   const [yearRange, setYearRange] = useState<YearRange>('recent5')
   const [modalType, setModalType] = useState<'pdf' | 'csv' | null>(null)
+  const [showApiSetup, setShowApiSetup] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(() => !!localStorage.getItem(LS_KEY))
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportHtml, setReportHtml] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   const {
-    bundle, loadError,
+    bundle, dataSource, loadError,
     pdfStatus, pdfFileName, pdfError,
     csvStatus, csvFileName, csvError,
+    clearAll, deletePeriod, mergeWarning, clearMergeWarning,
   } = useFinancials()
-
-  const { kpis } = bundle
 
   // ===== トースト管理 =====
   const addToast = useCallback((type: 'success' | 'error', message: string) => {
@@ -145,6 +148,153 @@ export function FinancialDashboard() {
     }
   }, [csvStatus, csvFileName, csvError, addToast])
 
+  // mergeWarning を監視してトースト発火
+  const prevMergeWarning = useRef<string | null>(null)
+  useEffect(() => {
+    if (!mergeWarning || mergeWarning === prevMergeWarning.current) return
+    prevMergeWarning.current = mergeWarning
+    const isError = mergeWarning.startsWith('error:')
+    const msg = mergeWarning.replace(/^(warn|error):/, '')
+    addToast(isError ? 'error' : 'success', msg)
+    clearMergeWarning()
+  }, [mergeWarning, addToast, clearMergeWarning])
+
+  // ===== 個別期削除ハンドラー =====
+  const handleDeletePeriod = useCallback((period: string) => {
+    const isLast = bundle.periods.length === 1
+    const msg = isLast
+      ? `「${period}」を削除すると全データがリセットされ、サンプル表示に戻ります。削除してよろしいですか？`
+      : `「${period}」のデータを削除します。よろしいですか？`
+    if (!window.confirm(msg)) return
+    deletePeriod(period)
+  }, [bundle.periods.length, deletePeriod])
+
+  // ===== 全クリアハンドラー =====
+  const handleClearAll = useCallback(() => {
+    if (!window.confirm('全ての財務データを削除します。よろしいですか？')) return
+    clearAll()
+  }, [clearAll])
+
+  // ===== 経営レポート生成 =====
+  const handleGenerateReport = useCallback(async () => {
+    const apiKey = localStorage.getItem(LS_KEY)
+    if (!apiKey) { setShowApiSetup(true); return }
+    const companyName = localStorage.getItem(LS_KEY_COMPANY) ?? '（会社名未設定）'
+    const latestPeriod = bundle.periods.at(-1) ?? '最新期'
+
+    const getVal = (rows: ReadonlyArray<{label: string; values: readonly number[]}>, label: string) =>
+      rows.find(r => r.label === label)?.values.at(-1) ?? 0
+    const getPrev = (rows: ReadonlyArray<{label: string; values: readonly number[]}>, label: string) =>
+      rows.find(r => r.label === label)?.values.at(-2) ?? null
+
+    const revenue    = getVal(bundle.profitLoss, '売上高')
+    const prevRev    = getPrev(bundle.profitLoss, '売上高')
+    const opProfit   = getVal(bundle.profitLoss, '営業利益')
+    const netProfit  = getVal(bundle.profitLoss, '当期純利益')
+    const totalAssets= getVal(bundle.balanceSheet.assets, '資産合計')
+    const equity     = getVal(bundle.balanceSheet.liabilitiesAndEquity, '純資産')
+    const longDebt   = getVal(bundle.balanceSheet.liabilitiesAndEquity, '長期借入金')
+    const opCF       = getVal(bundle.cashFlow, '営業活動によるキャッシュ・フロー')
+    const revenueYoY = prevRev && prevRev !== 0 ? ((revenue - prevRev) / prevRev * 100).toFixed(1) : 'N/A'
+    const opMargin   = revenue > 0 ? (opProfit / revenue * 100).toFixed(1) : '0.0'
+    const equityRatio= totalAssets !== 0 ? (equity / totalAssets * 100).toFixed(1) : '0.0'
+
+    const dataText = `
+会社名：${companyName}
+対象期：${latestPeriod}
+売上高：${revenue}百万円（前年比：${revenueYoY}%）
+営業利益：${opProfit}百万円（営業利益率：${opMargin}%）
+当期純利益：${netProfit}百万円
+総資産：${totalAssets}百万円
+純資産：${equity}百万円（自己資本比率：${equityRatio}%）
+長期借入金：${longDebt}百万円
+営業CF：${opCF}百万円
+`
+    setReportLoading(true)
+    try {
+      const isProd = window.location.hostname !== 'localhost'
+      const reportUrl = isProd ? '/api/claude' : 'https://api.anthropic.com/v1/messages'
+      const res = await fetch(reportUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(!isProd ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : {}),
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2000,
+          system: 'あなたは中小企業の財務分析の専門家です。提供された財務データを元に、経営者向けの簡潔でわかりやすい経営財務レポートを作成してください。専門用語には括弧で説明を加えてください。',
+          messages: [{
+            role: 'user',
+            content: `以下の財務データを元に経営財務レポートを作成してください。
+
+${dataText}
+
+以下の構成でHTML形式（本文部分のみ・<body>タグ不要）で出力してください：
+<h2>1. 経営サマリー</h2>
+<p>（3〜5行で今期の経営状況を総括）</p>
+<h2>2. 損益分析</h2>
+<p>（売上・利益トレンドの分析コメント）</p>
+<h2>3. 財務安全性</h2>
+<p>（BS・借入状況・自己資本比率の分析）</p>
+<h2>4. 重点課題TOP3</h2>
+<ol><li>...</li><li>...</li><li>...</li></ol>
+<h2>5. 来期への提言</h2>
+<p>（具体的な改善アクション）</p>`
+          }]
+        })
+      })
+      const data = await res.json()
+      const content = data.content?.filter((b: {type: string}) => b.type === 'text')
+        .map((b: {text: string}) => b.text).join('') ?? ''
+
+      const today = new Date().toLocaleDateString('ja-JP')
+      const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>経営財務レポート - ${companyName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; font-size: 11pt; color: #1a1a1a; background: #fff; padding: 40px; max-width: 800px; margin: 0 auto; }
+  .report-header { border-bottom: 3px solid #00b4b4; padding-bottom: 16px; margin-bottom: 24px; }
+  .report-title { font-size: 20pt; font-weight: 700; color: #00b4b4; }
+  .report-meta { font-size: 10pt; color: #555; margin-top: 6px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+  .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; text-align: center; }
+  .kpi-label { font-size: 8pt; color: #64748b; margin-bottom: 4px; }
+  .kpi-value { font-size: 14pt; font-weight: 700; color: #0f172a; }
+  h2 { font-size: 12pt; font-weight: 700; color: #00b4b4; border-left: 4px solid #00b4b4; padding-left: 10px; margin: 20px 0 8px; }
+  p { line-height: 1.8; margin-bottom: 8px; }
+  ol { padding-left: 20px; line-height: 2; }
+  .report-footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; text-align: right; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+<div class="report-header">
+  <div class="report-title">経営財務レポート</div>
+  <div class="report-meta">${companyName}　｜　対象期：${latestPeriod}　｜　作成日：${today}</div>
+</div>
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-label">売上高</div><div class="kpi-value">${revenue}百万円</div></div>
+  <div class="kpi-card"><div class="kpi-label">営業利益率</div><div class="kpi-value">${opMargin}%</div></div>
+  <div class="kpi-card"><div class="kpi-label">自己資本比率</div><div class="kpi-value">${equityRatio}%</div></div>
+  <div class="kpi-card"><div class="kpi-label">長期借入金</div><div class="kpi-value">${longDebt}百万円</div></div>
+</div>
+${content}
+<div class="report-footer">Powered by FinanceScope / 5web.jp　｜　本レポートはAIによる自動生成です。最終判断は専門家にご確認ください。</div>
+</body>
+</html>`
+
+      setReportHtml(html)
+    } catch (e) {
+      addToast('error', 'レポート生成に失敗しました')
+    } finally {
+      setReportLoading(false)
+    }
+  }, [bundle, addToast])
+
   // 粒度に応じたアクティブ bundle（月次がない場合は年次にフォールバック）
   const activeBundle = useMemo((): FinancialBundle => {
     if (granularity === 'monthly' && bundle.monthly) {
@@ -162,21 +312,48 @@ export function FinancialDashboard() {
   const hasMonthly = Boolean(bundle.monthly)
   const showNoMonthly = granularity === 'monthly' && !hasMonthly
 
-  const kpiValues: readonly string[] = [
-    `${kpis.revenueGrowthYoY.toFixed(1)}%`,
-    `${kpis.operatingMarginPct.toFixed(1)}%`,
-    `${kpis.equityRatioPct.toFixed(1)}%`,
-    formatMillionYen(kpis.freeCashFlow),
-  ]
+  const kpiValues: readonly string[] = useMemo(() => {
+    const lastOf = (rows: ReadonlyArray<{ label: string; values: readonly number[] }>, label: string) =>
+      rows.find((r) => r.label === label)?.values.at(-1) ?? 0
+
+    const revenue     = lastOf(bundle.profitLoss, '売上高')
+    const prevRevenue = bundle.profitLoss.find((r) => r.label === '売上高')?.values.at(-2) ?? 0
+    const opProfit    = lastOf(bundle.profitLoss, '営業利益')
+    const equity      = lastOf(bundle.balanceSheet.liabilitiesAndEquity, '純資産')
+    const totalAssets = lastOf(bundle.balanceSheet.assets, '資産合計')
+    const opCF        = lastOf(bundle.cashFlow, '営業活動によるキャッシュ・フロー')
+    const invCF       = lastOf(bundle.cashFlow, '投資活動によるキャッシュ・フロー')
+
+    const revenueGrowth = prevRevenue > 0 ? (revenue - prevRevenue) / prevRevenue * 100 : 0
+    const opMargin      = revenue > 0 ? opProfit / revenue * 100 : 0
+    const equityRatio   = totalAssets !== 0 ? equity / totalAssets * 100 : 0
+    const fcf           = opCF + invCF
+
+    return [
+      `${revenueGrowth.toFixed(1)}%`,
+      `${opMargin.toFixed(1)}%`,
+      `${equityRatio.toFixed(1)}%`,
+      formatMillionYen(fcf),
+    ]
+  }, [bundle])
 
   return (
     <div className="dash">
       <header className="dash-header">
         <div>
-          <h1 className="dash-title">財務ダッシュボード</h1>
+          <h1 className="dash-title">FinanceScope</h1>
           <p className="dash-sub">BS / PL / CF / Forecast / Strategy</p>
         </div>
         <div className="dash-header-actions">
+          <button
+            type="button"
+            className="btn-report"
+            onClick={handleGenerateReport}
+            disabled={reportLoading || dataSource === 'sample'}
+            title={dataSource === 'sample' ? 'PDFを読み込んでから使用できます' : '経営財務レポートを生成'}
+          >
+            {reportLoading ? <><span className="spinner" aria-hidden="true" /> 生成中...</> : '📊 経営レポート'}
+          </button>
           <button
             type="button"
             className="btn-upload-pdf"
@@ -195,6 +372,26 @@ export function FinancialDashboard() {
           >
             📊 月次CSV
           </button>
+          {dataSource !== 'sample' && (
+            <button
+              type="button"
+              className="btn-clear-all"
+              onClick={handleClearAll}
+              title="全データを削除"
+            >
+              🗑 全クリア
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn-settings"
+            onClick={() => setShowApiSetup(true)}
+            aria-label="APIキー設定"
+            title="APIキー設定"
+          >
+            ⚙️
+            {hasApiKey && <span className="btn-settings-dot" aria-hidden="true" />}
+          </button>
           <p className="unit-pill">単位: 百万円</p>
         </div>
       </header>
@@ -203,6 +400,28 @@ export function FinancialDashboard() {
         <p className="data-banner data-banner-err" role="alert">
           データの読み込みに失敗しました: {loadError}（サンプルを表示）
         </p>
+      )}
+
+      {dataSource !== 'sample' && (
+        <section className="period-list-section" aria-label="蓄積期リスト">
+          <span className="period-list-label">蓄積データ：</span>
+          <div className="period-tags">
+            {bundle.periods.map((period) => (
+              <span key={period} className="period-tag">
+                {period}
+                <button
+                  type="button"
+                  className="period-tag-del"
+                  onClick={() => handleDeletePeriod(period)}
+                  aria-label={`${period}を削除`}
+                  title={`${period}を削除`}
+                >
+                  🗑
+                </button>
+              </span>
+            ))}
+          </div>
+        </section>
       )}
 
       <section className="kpi-grid" aria-label="主要指標">
@@ -242,28 +461,10 @@ export function FinancialDashboard() {
 
         {tab === 'bs' && (
           <div className="panel" role="tabpanel">
-            <div className="panel-tab-header">
-              <YearRangeControl value={yearRange} onChange={setYearRange} />
-            </div>
             {granularity === 'monthly' && (
               <p className="bs-annual-note">BSは年次表示のみ対応しています</p>
             )}
-            <div className="panel-grid">
-              <BSBalanceChart bundle={bundle} yearRange={yearRange} />
-              <BSDonutChart bundle={bundle} />
-              <div className="dual-tables">
-                <AmountTable
-                  rows={bundle.balanceSheet.assets}
-                  periods={bundle.periods}
-                  caption="資産の部"
-                />
-                <AmountTable
-                  rows={bundle.balanceSheet.liabilitiesAndEquity}
-                  periods={bundle.periods}
-                  caption="負債・純資産の部"
-                />
-              </div>
-            </div>
+            <BSTab bundle={bundle} mode="cockpit" />
           </div>
         )}
 
@@ -330,7 +531,54 @@ export function FinancialDashboard() {
         <UploadModal type={modalType} onClose={() => setModalType(null)} />
       )}
 
+      {showApiSetup && (
+        <ApiKeySetup
+          onSave={() => { setShowApiSetup(false); setHasApiKey(true) }}
+          onClose={() => setShowApiSetup(false)}
+        />
+      )}
+
       <ToastContainer toasts={toasts} onClose={removeToast} />
+    {reportHtml && (
+        <div
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:1000, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', overflowY:'auto', padding:'20px' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setReportHtml(null) }}
+        >
+          <div style={{ background:'#fff', borderRadius:8, width:'100%', maxWidth:860, position:'relative' }}>
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8, padding:'12px 16px', borderBottom:'1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const w = window.open('', '_blank')
+                  if (w) { w.document.write(reportHtml); w.document.close(); setTimeout(() => w.print(), 800) }
+                }}
+                style={{ padding:'6px 16px', background:'#00b4b4', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontWeight:600 }}
+              >🖨️ 印刷 / PDF保存</button>
+              <button
+                type="button"
+                onClick={() => setReportHtml(null)}
+                style={{ padding:'6px 16px', background:'#e2e8f0', color:'#1a1a1a', border:'none', borderRadius:6, cursor:'pointer' }}
+              >✕ 閉じる</button>
+            </div>
+            <iframe
+              srcDoc={reportHtml}
+              style={{ width:'100%', height:'80vh', border:'none', borderRadius:'0 0 8px 8px' }}
+              title="経営財務レポート"
+            />
+          </div>
+        </div>
+      )}
+    <footer style={{
+        textAlign: 'center',
+        padding: '1.5rem',
+        marginTop: '2rem',
+        borderTop: '1px solid rgba(148,163,184,0.15)',
+        color: '#64748b',
+        fontSize: '0.75rem',
+        letterSpacing: '0.05em',
+      }}>
+        © 2026 5web.jp – Powered by Go Kawabata
+      </footer>
     </div>
   )
 }
