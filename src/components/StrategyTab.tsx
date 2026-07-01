@@ -10,7 +10,7 @@ import {
   Legend,
 } from 'recharts'
 import type { ImprovementItem } from '../data/memorialFinancials'
-import { LS_KEY, LS_KEY_COMPANY } from './ApiKeySetup'
+import { LS_KEY, LS_KEY_COMPANY, getLicensePlan } from './ApiKeySetup'
 import type { FinancialBundle } from '../types/financials'
 import {
   buildDefaultSliderParams,
@@ -189,6 +189,7 @@ function urgencyClass(urgency: string): string {
 }
 
 export function StrategyTab({ bundle }: Props) {
+  const plan = getLicensePlan()
   const base           = useMemo(() => buildForecastBase(bundle),      [bundle])
   const defaultParams  = useMemo(() => buildDefaultSliderParams(base), [base])
   const optimizedParams = useMemo(() => buildOptimizedParams(base),    [base])
@@ -419,10 +420,10 @@ export function StrategyTab({ bundle }: Props) {
         <button
           type="button"
           onClick={handleAnalysis}
-          disabled={analysisLoading}
+          disabled={analysisLoading || plan === 'free'}
           style={{ padding:'10px 24px', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, fontWeight:600, cursor:'pointer', opacity: analysisLoading ? 0.6 : 1 }}
         >
-          {analysisLoading ? '🔄 分析中...' : '🎯 SWOT・3C分析を実行'}
+          {plan === 'free' ? '🔒 スタンダード以上で利用可能' : analysisLoading ? '🔄 分析中...' : '🎯 SWOT・3C分析を実行'}
         </button>
         {analysisResult && (
           <div style={{ marginTop:20 }}>

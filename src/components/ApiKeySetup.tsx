@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 
 export const LS_KEY = 'anthropic_api_key'
 export const LS_KEY_COMPANY = 'finance_company_name'
+export const LS_KEY_LICENSE = 'finance_license_key'
+
+// ライセンスキー検証（プレフィックスでプラン判定）
+export function getLicensePlan(): 'free' | 'standard' | 'premium' {
+  const key = localStorage.getItem(LS_KEY_LICENSE) ?? ''
+  if (key.startsWith('FS-PRE-')) return 'premium'
+  if (key.startsWith('FS-STD-')) return 'standard'
+  return 'free'
+}
 
 type Props = {
   onSave: () => void
@@ -11,6 +20,12 @@ type Props = {
 export function ApiKeySetup({ onSave, onClose }: Props) {
   const [value, setValue] = useState(() => localStorage.getItem(LS_KEY) ?? '')
   const [company, setCompany] = useState(() => localStorage.getItem('finance_company_name') ?? '')
+  const [license, setLicense] = useState(() => localStorage.getItem(LS_KEY_LICENSE) ?? '')
+  const [licenseStatus, setLicenseStatus] = useState<'idle'|'ok'|'invalid'>(() => {
+    const saved = localStorage.getItem(LS_KEY_LICENSE) ?? ''
+    if (saved.startsWith('FS-STD-') || saved.startsWith('FS-PRE-')) return 'ok'
+    return 'idle'
+  })
   const [showKey, setShowKey] = useState(false)
   const [error, setError] = useState('')
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -37,6 +52,14 @@ export function ApiKeySetup({ onSave, onClose }: Props) {
     }
     localStorage.setItem(LS_KEY, trimmed)
     localStorage.setItem('finance_company_name', company.trim())
+    const trimmedLicense = license.trim()
+    if (trimmedLicense && !trimmedLicense.startsWith('FS-STD-') && !trimmedLicense.startsWith('FS-PRE-')) {
+      setLicenseStatus('invalid')
+      return
+    }
+    if (trimmedLicense) localStorage.setItem(LS_KEY_LICENSE, trimmedLicense)
+    else localStorage.removeItem(LS_KEY_LICENSE)
+    setLicenseStatus(trimmedLicense ? 'ok' : 'idle')
     setError('')
     onSave()
   }
@@ -93,6 +116,28 @@ export function ApiKeySetup({ onSave, onClose }: Props) {
         {error && <p className="apikey-error" role="alert">{error}</p>}
       </div>
 
+      <div className="apikey-field">
+        <label className="apikey-label" htmlFor="license-input">ライセンスキー（オプション）</label>
+        <input
+          id="license-input"
+          className={`apikey-input${licenseStatus === 'invalid' ? ' apikey-input-err' : ''}`}
+          type="text"
+          value={license}
+          onChange={(e) => {
+            const v = e.target.value
+            setLicense(v)
+            if (v === '') setLicenseStatus('idle')
+            else if (v.startsWith('FS-STD-') || v.startsWith('FS-PRE-')) setLicenseStatus('ok')
+            else setLicenseStatus('invalid')
+          }}
+          placeholder="FS-STD-XXXX または FS-PRE-XXXX"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {licenseStatus === 'invalid' && <p className="apikey-error" role="alert">無効なライセンスキーです（FS-STD- または FS-PRE- で始まる必要があります）</p>}
+        {licenseStatus === 'ok' && <p style={{color:'#059669',fontSize:'0.8rem',marginTop:4}}>✅ ライセンス認証済み（{license.startsWith('FS-PRE-') ? 'プレミアム' : 'スタンダード'}プラン）</p>}
+        <p style={{fontSize:'0.75rem',color:'#94a3b8',marginTop:4}}>未入力の場合は無料プラン（サンプルデータのみ）</p>
+      </div>
       <a
         className="apikey-link"
         href="https://console.anthropic.com/settings/keys"

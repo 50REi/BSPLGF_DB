@@ -4,7 +4,7 @@ import { kpiGlossary } from '../data/kpiGlossary'
 import { formatMillionYen } from '../lib/format'
 import type { FinancialBundle } from '../types/financials'
 import { AmountTable } from './AmountTable'
-import { ApiKeySetup, LS_KEY, LS_KEY_COMPANY } from './ApiKeySetup'
+import { ApiKeySetup, LS_KEY, LS_KEY_COMPANY, getLicensePlan } from './ApiKeySetup'
 import { BepSection } from './BepSection'
 import { CockpitTab } from './CockpitTab'
 import { ForecastTab } from './ForecastTab'
@@ -102,6 +102,7 @@ export function FinancialDashboard() {
   const [modalType, setModalType] = useState<'pdf' | 'csv' | null>(null)
   const [showApiSetup, setShowApiSetup] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(() => !!localStorage.getItem(LS_KEY))
+  const [plan, setPlan] = useState<'free'|'standard'|'premium'>(() => getLicensePlan())
   const [reportLoading, setReportLoading] = useState(false)
   const [reportHtml, setReportHtml] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastItem[]>([])
@@ -343,14 +344,41 @@ ${content}
         <div>
           <h1 className="dash-title">FinanceScope</h1>
           <p className="dash-sub">BS / PL / CF / Forecast / Strategy</p>
+          {plan !== 'free' && (
+            <span title={plan === 'premium' ? 'Premiumプラン認証済み' : 'Standardプラン認証済み'} style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              marginTop: '6px',
+              padding: '3px 10px 3px 7px',
+              borderRadius: '20px',
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              background: plan === 'premium'
+                ? 'linear-gradient(135deg,#7c3aed 0%,#c026d3 100%)'
+                : 'linear-gradient(135deg,#0284c7 0%,#06b6d4 100%)',
+              color: '#fff',
+              boxShadow: plan === 'premium'
+                ? '0 0 0 1px rgba(192,38,211,0.5), 0 0 12px rgba(192,38,211,0.35)'
+                : '0 0 0 1px rgba(6,182,212,0.5), 0 0 12px rgba(6,182,212,0.35)',
+              cursor: 'default',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1l2.39 3.31L18 3.27l.74 3.99 3.99.74-1.04 3.61L24 14l-3.31 2.39L21.73 20l-3.99-.74-.74 3.99-3.61-1.04L12 24l-2.39-3.31L6 21.73l-.74-3.99-3.99-.74 1.04-3.61L0 10l3.31-2.39L2.27 4l3.99.74L7 .75l3.61 1.04z" opacity="0.95"/>
+                <path d="M9 12.5l2 2 4-4.5" stroke="#0a1628" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </svg>
+              {plan === 'premium' ? 'PREMIUM' : 'STANDARD'}
+            </span>
+          )}
         </div>
         <div className="dash-header-actions">
           <button
             type="button"
             className="btn-report"
             onClick={handleGenerateReport}
-            disabled={reportLoading || dataSource === 'sample'}
-            title={dataSource === 'sample' ? 'PDFを読み込んでから使用できます' : '経営財務レポートを生成'}
+            disabled={reportLoading || dataSource === 'sample' || plan === 'free'}
+            title={plan === 'free' ? 'スタンダード以上のプランで利用可能' : dataSource === 'sample' ? 'PDFを読み込んでから使用できます' : '経営財務レポートを生成'}
           >
             {reportLoading ? <><span className="spinner" aria-hidden="true" /> 生成中...</> : '📊 経営レポート'}
           </button>
@@ -533,7 +561,7 @@ ${content}
 
       {showApiSetup && (
         <ApiKeySetup
-          onSave={() => { setShowApiSetup(false); setHasApiKey(true) }}
+          onSave={() => { setShowApiSetup(false); setHasApiKey(true); setPlan(getLicensePlan()) }}
           onClose={() => setShowApiSetup(false)}
         />
       )}
