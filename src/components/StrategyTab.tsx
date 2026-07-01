@@ -420,10 +420,10 @@ export function StrategyTab({ bundle }: Props) {
         <button
           type="button"
           onClick={handleAnalysis}
-          disabled={analysisLoading || plan === 'free'}
+          disabled={analysisLoading || plan !== 'premium'}
           style={{ padding:'10px 24px', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, fontWeight:600, cursor:'pointer', opacity: analysisLoading ? 0.6 : 1 }}
         >
-          {plan === 'free' ? '🔒 スタンダード以上で利用可能' : analysisLoading ? '🔄 分析中...' : '🎯 SWOT・3C分析を実行'}
+          {plan !== 'premium' ? '🔒 プレミアム限定機能' : analysisLoading ? '🔄 分析中...' : '🎯 SWOT・3C分析を実行'}
         </button>
         {analysisResult && (
           <div style={{ marginTop:20 }}>
