@@ -19,6 +19,22 @@ import {
   PLTrendChart,
   type YearRange,
 } from './TrendCharts'
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+
+const AXIS_TICK  = { fill: '#94a3b8', fontSize: 12 } as const
+const AXIS_TICK_S = { fill: '#94a3b8', fontSize: 11 } as const
+const GRID_STROKE = '#2d4057'
+const tooltipSurface = { background: '#243447', border: '1px solid #2d4057', borderRadius: 8, color: '#ffffff', fontSize: '0.8rem' }
 
 type TabId = 'cockpit' | 'bs' | 'pl' | 'cf' | 'forecast' | 'strategy'
 type Granularity = 'annual' | 'monthly'
@@ -104,6 +120,9 @@ export function FinancialDashboard() {
   const [hasApiKey, setHasApiKey] = useState(() => !!localStorage.getItem(LS_KEY))
   const [plan, setPlan] = useState<'free'|'standard'|'premium'>(() => getLicensePlan())
   const [reportLoading, setReportLoading] = useState(false)
+  const [storeTab, setStoreTab] = useState<string>('all')
+  const [showStoreModal, setShowStoreModal] = useState(false)
+  const [storeNameInput, setStoreNameInput] = useState('')
   const [reportHtml, setReportHtml] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
@@ -112,6 +131,7 @@ export function FinancialDashboard() {
     pdfStatus, pdfFileName, pdfError,
     csvStatus, csvFileName, csvError,
     clearAll, deletePeriod, mergeWarning, clearMergeWarning,
+    loadStoreFromPdf, storeStatus, storeFileName, storeError, deleteStore,
   } = useFinancials()
 
   // ===== トースト管理 =====
@@ -508,13 +528,123 @@ ${content}
               <NoMonthlyData />
             ) : (
               <div className="panel-grid">
-                <PLTrendChart
-                  bundle={activeBundle}
-                  yearRange={granularity === 'annual' ? yearRange : undefined}
-                />
-                <PLDonutChart bundle={activeBundle} />
-                <AmountTable rows={activeBundle.profitLoss} periods={activeBundle.periods} />
-                <BepSection bundle={activeBundle} />
+                {/* 店舗タブ（STD以上） */}
+                {plan !== 'free' && (
+                  <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setStoreTab('all')}
+                      style={{ padding:'6px 14px', borderRadius:'20px', border:'none', cursor:'pointer', fontWeight: storeTab === 'all' ? 700 : 400, background: storeTab === 'all' ? 'var(--accent)' : 'var(--surface)', color: storeTab === 'all' ? '#fff' : 'var(--text)', fontSize:'0.85rem' }}
+                    >全社</button>
+                    {(bundle.stores ?? []).map(s => (
+                      <span key={s.storeName} style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setStoreTab(s.storeName)}
+                          style={{ padding:'6px 14px', borderRadius:'20px', border:'none', cursor:'pointer', fontWeight: storeTab === s.storeName ? 700 : 400, background: storeTab === s.storeName ? '#7c3aed' : 'var(--surface)', color: storeTab === s.storeName ? '#fff' : 'var(--text)', fontSize:'0.85rem' }}
+                        >{s.storeName}</button>
+                        <button type="button" onClick={() => { deleteStore(s.storeName); if (storeTab === s.storeName) setStoreTab('all') }} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:'0.8rem', padding:'2px' }} title="削除">✕</button>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowStoreModal(true)}
+                      style={{ padding:'6px 12px', borderRadius:'20px', border:'1px dashed #475569', cursor:'pointer', background:'transparent', color:'#94a3b8', fontSize:'0.82rem' }}
+                    >＋ 店舗追加</button>
+                  </div>
+                )}
+                {/* 店舗比較グラフ（2店舗以上・全社タブ時） */}
+                {plan !== 'free' && storeTab === 'all' && (bundle.stores ?? []).length >= 2 && (() => {
+                  const stores = bundle.stores ?? []
+                  const allStoreNames = stores.map(s => s.storeName)
+                  const compData = stores[0].periods.map((p, pi) => {
+                    const entry: Record<string, string | number> = { period: p.replace('期','') }
+                    stores.forEach(s => {
+                      const rev = s.profitLoss.find(r => r.label === '売上高')?.values[pi] ?? 0
+                      const op  = s.profitLoss.find(r => r.label === '営業利益')?.values[pi] ?? 0
+                      entry[`${s.storeName}_売上`] = rev
+                      entry[`${s.storeName}_営業利益`] = op
+                    })
+                    return entry
+                  })
+                  const COLORS = ['#00b4b4','#7c3aed','#e8534a','#f59e0b','#059669']
+                  return (
+                    <figure className="chart-card">
+                      <figcaption>店舗別 売上・営業利益比較（百万円）</figcaption>
+                      <div className="chart-body">
+                        <ResponsiveContainer width="100%" height={260}>
+                          <ComposedChart data={compData} margin={{ top:8, right:16, left:8, bottom:0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                            <XAxis dataKey="period" tick={AXIS_TICK} />
+                            <YAxis tick={AXIS_TICK_S} tickFormatter={(v) => formatMillionYen(v as number)} />
+                            <Tooltip contentStyle={tooltipSurface} />
+                            <Legend />
+                            {allStoreNames.map((name, i) => (
+                              <Bar key={name} dataKey={`${name}_売上`} name={`${name} 売上`} fill={COLORS[i % COLORS.length]} opacity={0.4} radius={[4,4,0,0]} />
+                            ))}
+                            {allStoreNames.map((name, i) => (
+                              <Line key={`${name}_op`} type="monotone" dataKey={`${name}_営業利益`} name={`${name} 営業利益`} stroke={COLORS[i % COLORS.length]} strokeWidth={2.5} dot={{ r:3 }} />
+                            ))}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </figure>
+                  )
+                })()}
+                {/* 店舗個別PL or 全社PL */}
+                {plan !== 'free' && storeTab !== 'all' ? (() => {
+                  const store = (bundle.stores ?? []).find(s => s.storeName === storeTab)
+                  if (!store) return null
+                  return (
+                    <>
+                      <PLDonutChart bundle={{ ...activeBundle, profitLoss: store.profitLoss, periods: store.periods }} />
+                      <AmountTable rows={store.profitLoss} periods={store.periods} />
+                    </>
+                  )
+                })() : (
+                  <>
+                    <PLTrendChart bundle={activeBundle} yearRange={granularity === 'annual' ? yearRange : undefined} />
+                    <PLDonutChart bundle={activeBundle} />
+                    <AmountTable rows={activeBundle.profitLoss} periods={activeBundle.periods} />
+                    <BepSection bundle={activeBundle} />
+                  </>
+                )}
+              </div>
+            )}
+            {/* 店舗追加モーダル */}
+            {showStoreModal && (
+              <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+                onClick={e => { if (e.target === e.currentTarget) setShowStoreModal(false) }}>
+                <div style={{ background:'var(--surface)', borderRadius:12, padding:'28px', width:'420px', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
+                  <h3 style={{ margin:'0 0 16px', color:'var(--text-h)', fontSize:'1.1rem' }}>🏪 店舗PDFを読み込む</h3>
+                  <label style={{ fontSize:'0.8rem', color:'var(--text)', display:'block', marginBottom:6 }}>店舗名</label>
+                  <input
+                    value={storeNameInput}
+                    onChange={e => setStoreNameInput(e.target.value)}
+                    placeholder="例：大内店"
+                    style={{ width:'100%', padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-h)', fontSize:'0.9rem', marginBottom:12, boxSizing:'border-box' }}
+                  />
+                  <label style={{ fontSize:'0.8rem', color:'var(--text)', display:'block', marginBottom:6 }}>試算表PDF</label>
+                  <input
+                    type="file" accept=".pdf"
+                    disabled={!storeNameInput.trim() || storeStatus === 'loading'}
+                    onChange={async e => {
+                      const file = e.target.files?.[0]
+                      if (!file || !storeNameInput.trim()) return
+                      await loadStoreFromPdf(file, storeNameInput.trim())
+                      setShowStoreModal(false)
+                      setStoreNameInput('')
+                      setStoreTab(storeNameInput.trim())
+                    }}
+                    style={{ width:'100%', fontSize:'0.85rem', color:'var(--text)' }}
+                  />
+                  {storeStatus === 'loading' && <p style={{ color:'#00b4b4', marginTop:8, fontSize:'0.85rem' }}>🔄 {storeFileName} 解析中...</p>}
+                  {storeStatus === 'error' && <p style={{ color:'#e8534a', marginTop:8, fontSize:'0.85rem' }}>❌ {storeError}</p>}
+                  <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
+                    <button type="button" onClick={() => setShowStoreModal(false)}
+                      style={{ padding:'8px 20px', background:'var(--border)', color:'var(--text)', border:'none', borderRadius:6, cursor:'pointer' }}>閉じる</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

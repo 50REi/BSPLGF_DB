@@ -24,6 +24,12 @@ export type MonthlyBundle = {
   cashFlow: readonly AmountRow[]
 }
 
+export type StoreBundle = {
+  storeName: string
+  periods: readonly string[]
+  profitLoss: readonly AmountRow[]
+}
+
 export type FinancialBundle = {
   periods: readonly string[]
   balanceSheet: {
@@ -34,4 +40,5 @@ export type FinancialBundle = {
   cashFlow: readonly AmountRow[]
   kpis: FinancialKpis
   monthly?: MonthlyBundle
+  stores?: readonly StoreBundle[]
 }

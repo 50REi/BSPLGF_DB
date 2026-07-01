@@ -37,6 +37,11 @@ type Ctx = {
   deletePeriod: (period: string) => void
   mergeWarning: string | null
   clearMergeWarning: () => void
+  loadStoreFromPdf: (file: File, storeName: string) => Promise<void>
+  storeStatus: 'idle' | 'loading' | 'success' | 'error'
+  storeFileName: string
+  storeError: string
+  deleteStore: (storeName: string) => void
 }
 
 const FinancialDataContext = createContext<Ctx | null>(null)
@@ -120,6 +125,11 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [mergeWarning, setMergeWarning] = useState<string | null>(null)
 
+  // 店舗別PDF関連のstate
+  const [storeStatus, setStoreStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [storeFileName, setStoreFileName] = useState('')
+  const [storeError, setStoreError] = useState('')
+
   // PDF関連のstate
   const [pdfStatus, setPdfStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [pdfFileName, setPdfFileName] = useState('')
@@ -196,6 +206,96 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clearMergeWarning = useCallback(() => setMergeWarning(null), [])
+
+  // ===== 店舗削除 =====
+  const deleteStore = useCallback((storeName: string) => {
+    setBundle(prev => ({
+      ...prev,
+      stores: prev.stores?.filter(s => s.storeName !== storeName),
+    }))
+  }, [])
+
+  // ===== 店舗別PDF読込 =====
+  const loadStoreFromPdf = useCallback(async (file: File, storeName: string) => {
+    const apiKey = localStorage.getItem('anthropic_api_key') ?? import.meta.env.VITE_ANTHROPIC_API_KEY
+    if (!apiKey) {
+      setStoreError('APIキーが未設定です')
+      setStoreStatus('error')
+      return
+    }
+    setStoreStatus('loading')
+    setStoreFileName(file.name)
+    setStoreError('')
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      const apiUrl = isProd ? '/api/claude' : 'https://api.anthropic.com/v1/messages'
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(!isProd ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : {}),
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 3000,
+          system: `あなたは財務データ抽出の専門家です。店舗・支店の試算表PDFから損益データを抽出し、指定のJSON形式で返してください。必ずJSON形式のみを返し、説明文は不要です。単位は百万円（小数点以下切り捨て）。`,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              { type: 'text', text: `この試算表PDFから損益データを抽出してください。店舗名：${storeName}
+{
+  "storeName": "${storeName}",
+  "periods": ["YYYY/M期"],
+  "profitLoss": [
+    { "label": "売上高", "values": [数値], "emphasis": true },
+    { "label": "売上原価", "values": [数値], "indent": true },
+    { "label": "売上総利益", "values": [数値], "emphasis": true },
+    { "label": "販売費及び一般管理費", "values": [数値], "indent": true },
+    { "label": "営業利益", "values": [数値], "emphasis": true },
+    { "label": "経常利益", "values": [数値], "emphasis": true },
+    { "label": "当期純利益", "values": [数値], "emphasis": true }
+  ]
+}` }
+            ]
+          }]
+        })
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error?.message ?? `APIエラー: ${response.status}`)
+      }
+      const result = await response.json()
+      const rawText: string = result.content
+        .filter((b: { type: string }) => b.type === 'text')
+        .map((b: { text: string }) => b.text)
+        .join('')
+      const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/) ?? rawText.match(/(\{[\s\S]*\})/)
+      if (!jsonMatch) throw new Error('JSONの抽出に失敗しました')
+      const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]) as {
+        storeName: string; periods: string[]; profitLoss: { label: string; values: number[]; emphasis?: boolean; indent?: boolean }[]
+      }
+      setBundle(prev => {
+        const existing = prev.stores ?? []
+        const filtered = existing.filter(s => s.storeName !== storeName)
+        return {
+          ...prev,
+          stores: [...filtered, { storeName: parsed.storeName, periods: parsed.periods, profitLoss: parsed.profitLoss }]
+        }
+      })
+      setStoreStatus('success')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '不明なエラー'
+      setStoreError(msg)
+      setStoreStatus('error')
+    }
+  }, [])
 
   // ===== PDF読み込み関数 =====
   const loadFromPdf = useCallback(async (file: File) => {
@@ -358,10 +458,12 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
       loadFromPdf, pdfStatus, pdfFileName, pdfError, pdfProgress,
       loadFromCsv, csvStatus, csvFileName, csvError,
       clearAll, deletePeriod, mergeWarning, clearMergeWarning,
+      loadStoreFromPdf, storeStatus, storeFileName, storeError, deleteStore,
     }),
     [bundle, dataSource, loadError, loadFromPdf, pdfStatus, pdfFileName, pdfError, pdfProgress,
      loadFromCsv, csvStatus, csvFileName, csvError,
-     clearAll, deletePeriod, mergeWarning, clearMergeWarning],
+     clearAll, deletePeriod, mergeWarning, clearMergeWarning,
+     loadStoreFromPdf, storeStatus, storeFileName, storeError, deleteStore],
   )
 
   return (
