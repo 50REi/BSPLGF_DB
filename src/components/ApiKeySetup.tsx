@@ -4,12 +4,61 @@ export const LS_KEY = 'anthropic_api_key'
 export const LS_KEY_COMPANY = 'finance_company_name'
 export const LS_KEY_LICENSE = 'finance_license_key'
 
+export type LicensePlan = 'free' | 'lite' | 'standard' | 'premium'
+
 // ライセンスキー検証（プレフィックスでプラン判定）
-export function getLicensePlan(): 'free' | 'standard' | 'premium' {
-  const key = localStorage.getItem(LS_KEY_LICENSE) ?? ''
-  if (key.startsWith('FS-PRE-')) return 'premium'
-  if (key.startsWith('FS-STD-')) return 'standard'
+// 旧 FS- 系は認証を通さない（併存なし・クリーン移行）
+export function isValidLicenseKey(key: string): boolean {
+  return key.startsWith('FP-LITE-') || key.startsWith('FP-STD-') || key.startsWith('FP-PRE-')
+}
+
+export function planFromKey(key: string): LicensePlan {
+  if (key.startsWith('FP-PRE-')) return 'premium'
+  if (key.startsWith('FP-STD-')) return 'standard'
+  if (key.startsWith('FP-LITE-')) return 'lite'
   return 'free'
+}
+
+export function getLicensePlan(): LicensePlan {
+  return planFromKey(localStorage.getItem(LS_KEY_LICENSE) ?? '')
+}
+
+// ===== 機能ゲーティング（確定マトリクスの正本・ここだけ触れば全機能に反映）=====
+export const PLAN_RANK: Record<LicensePlan, number> = { free: 0, lite: 1, standard: 2, premium: 3 }
+
+export function planAtLeast(plan: LicensePlan, min: LicensePlan): boolean {
+  return PLAN_RANK[plan] >= PLAN_RANK[min]
+}
+
+export type Capabilities = {
+  pdf: boolean       // PDF解析・財務三表(BS/PL/CF)・KPI（ライト以上）
+  report: boolean    // 経営レポート自動生成（ライト以上）
+  forecast: boolean  // 業績予測 Forecast（スタンダード以上）
+  strategy: boolean  // 改善提案 Strategy（スタンダード以上）
+  csv: boolean       // 月次CSV取込（スタンダード以上）
+  persist: boolean   // ローカル永続保存・複数期追跡（スタンダード以上）
+  stores: boolean    // 店舗別/複数拠点PL・店舗間比較（プレミアムのみ）
+  swot: boolean      // SWOT・3C（プレミアムのみ）
+}
+
+export function capsOf(plan: LicensePlan): Capabilities {
+  return {
+    pdf:      planAtLeast(plan, 'lite'),
+    report:   planAtLeast(plan, 'lite'),
+    forecast: planAtLeast(plan, 'standard'),
+    strategy: planAtLeast(plan, 'standard'),
+    csv:      planAtLeast(plan, 'standard'),
+    persist:  planAtLeast(plan, 'standard'),
+    stores:   planAtLeast(plan, 'premium'),
+    swot:     planAtLeast(plan, 'premium'),
+  }
+}
+
+const PLAN_LABEL: Record<LicensePlan, string> = {
+  free: '無料',
+  lite: 'ライト',
+  standard: 'スタンダード',
+  premium: 'プレミアム',
 }
 
 type Props = {
@@ -23,7 +72,7 @@ export function ApiKeySetup({ onSave, onClose }: Props) {
   const [license, setLicense] = useState(() => localStorage.getItem(LS_KEY_LICENSE) ?? '')
   const [licenseStatus, setLicenseStatus] = useState<'idle'|'ok'|'invalid'>(() => {
     const saved = localStorage.getItem(LS_KEY_LICENSE) ?? ''
-    if (saved.startsWith('FS-STD-') || saved.startsWith('FS-PRE-')) return 'ok'
+    if (isValidLicenseKey(saved)) return 'ok'
     return 'idle'
   })
   const [showKey, setShowKey] = useState(false)
@@ -53,7 +102,7 @@ export function ApiKeySetup({ onSave, onClose }: Props) {
     localStorage.setItem(LS_KEY, trimmed)
     localStorage.setItem('finance_company_name', company.trim())
     const trimmedLicense = license.trim()
-    if (trimmedLicense && !trimmedLicense.startsWith('FS-STD-') && !trimmedLicense.startsWith('FS-PRE-')) {
+    if (trimmedLicense && !isValidLicenseKey(trimmedLicense)) {
       setLicenseStatus('invalid')
       return
     }
@@ -127,16 +176,20 @@ export function ApiKeySetup({ onSave, onClose }: Props) {
             const v = e.target.value
             setLicense(v)
             if (v === '') setLicenseStatus('idle')
-            else if (v.startsWith('FS-STD-') || v.startsWith('FS-PRE-')) setLicenseStatus('ok')
+            else if (isValidLicenseKey(v)) setLicenseStatus('ok')
             else setLicenseStatus('invalid')
           }}
-          placeholder="FS-STD-XXXX または FS-PRE-XXXX"
+          placeholder="FP-LITE-XXXX / FP-STD-XXXX / FP-PRE-XXXX"
           autoComplete="off"
           spellCheck={false}
         />
-        {licenseStatus === 'invalid' && <p className="apikey-error" role="alert">無効なライセンスキーです（FS-STD- または FS-PRE- で始まる必要があります）</p>}
-        {licenseStatus === 'ok' && <p style={{color:'#059669',fontSize:'0.8rem',marginTop:4}}>✅ ライセンス認証済み（{license.startsWith('FS-PRE-') ? 'プレミアム' : 'スタンダード'}プラン）</p>}
+        {licenseStatus === 'invalid' && <p className="apikey-error" role="alert">無効なライセンスキーです（FP-LITE- / FP-STD- / FP-PRE- で始まる必要があります）</p>}
+        {licenseStatus === 'ok' && <p style={{color:'#059669',fontSize:'0.8rem',marginTop:4}}>✅ ライセンス認証済み（{PLAN_LABEL[planFromKey(license.trim())]}プラン）</p>}
         <p style={{fontSize:'0.75rem',color:'#94a3b8',marginTop:4}}>未入力の場合は無料プラン（サンプルデータのみ）</p>
+        <div style={{fontSize:'0.72rem',color:'#94a3b8',marginTop:8,lineHeight:1.7,background:'rgba(148,163,184,0.08)',borderRadius:6,padding:'8px 10px'}}>
+          <div><strong style={{color:'#cbd5e1'}}>プラン：</strong>ライト ¥19,800 ／ スタンダード ¥29,800 ／ プレミアム ¥49,800（月額・税別）</div>
+          <div style={{marginTop:2}}><strong style={{color:'#cbd5e1'}}>金庫（保存先）：</strong>ローカル ¥0 ／ SaaS ¥0 ／ オンプレ 個別見積り ※ローカル永続保存はスタンダード以上</div>
+        </div>
       </div>
       <a
         className="apikey-link"

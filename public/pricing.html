@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinancePulse 料金 — プランと保存先を選ぶだけ</title>
+<meta name="description" content="FinancePulseの料金ページ。プラン（ライト/スタンダード/プレミアム）と保存先（ローカル/SaaS/オンプレ）を選ぶだけ。会計ソフト連携不要・初期費用0円から。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F1F3D;
+    --navy-2: #16294d;
+    --surface: #1b3057;
+    --line: rgba(255,255,255,0.12);
+    --accent: #00b4b4;      /* FinancePulse teal（アプリと統一） */
+    --accent-2: #06d6d6;
+    --premium: #c026d3;
+    --steel: #93a3bd;
+    --text: #e8eefb;
+    --ok: #10b981;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Noto Sans JP', 'Inter', sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  .accent { color: var(--accent); }
+
+  /* ===== Hero ===== */
+  header.hero {
+    background: radial-gradient(1200px 500px at 50% -10%, rgba(0,180,180,0.18), transparent 60%), var(--navy);
+    padding: 84px 0 64px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display:inline-flex; align-items:center; gap:10px; margin-bottom:22px; }
+  .brand-mark {
+    width:34px; height:34px; border-radius:9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display:grid; place-items:center; color:#04222a; font-weight:900; font-family:'Inter';
+    box-shadow: 0 0 24px rgba(0,180,180,0.5);
+  }
+  .brand-name { font-family:'Inter'; font-weight:900; font-size:1.25rem; letter-spacing:0.02em; }
+  .hero h1 { font-size: clamp(1.7rem, 5vw, 2.9rem); font-weight:700; line-height:1.35; margin-bottom:18px; }
+  .hero p.lead { color: var(--steel); font-size: clamp(0.95rem, 2.5vw, 1.1rem); max-width: 640px; margin: 0 auto 30px; }
+  .hero-badges { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .hero-badge { font-size:0.78rem; color:var(--text); background: var(--surface); border:1px solid var(--line); padding:6px 14px; border-radius:999px; }
+
+  /* ===== Section ===== */
+  section { padding: 64px 0; }
+  .section-label { display:block; text-align:center; color:var(--accent); font-family:'Inter'; font-weight:700; letter-spacing:0.18em; font-size:0.78rem; margin-bottom:10px; }
+  .section-h2 { text-align:center; font-size: clamp(1.4rem, 4vw, 2rem); font-weight:700; margin-bottom:8px; }
+  .section-lead { text-align:center; color:var(--steel); margin-bottom:40px; }
+
+  /* ===== 2-step ===== */
+  .step-head { display:flex; align-items:center; gap:12px; margin: 0 0 20px; }
+  .step-num {
+    width:38px; height:38px; border-radius:50%; flex:none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color:#04222a; font-family:'Inter'; font-weight:900; font-size:1.05rem;
+    display:grid; place-items:center;
+  }
+  .step-title { font-size:1.15rem; font-weight:700; }
+  .step-sub { color:var(--steel); font-size:0.85rem; }
+  .step { margin-bottom: 44px; }
+
+  .cards { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; }
+  .card {
+    position:relative; background: var(--surface); border:1.5px solid var(--line);
+    border-radius: var(--radius); padding: 22px 20px; cursor:pointer;
+    transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+    text-align:left;
+  }
+  .card:hover { transform: translateY(-3px); }
+  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 26px rgba(0,180,180,0.28); }
+  .card .radio {
+    position:absolute; top:16px; right:16px; width:20px; height:20px; border-radius:50%;
+    border:2px solid var(--steel); transition: all .15s;
+  }
+  .card.selected .radio { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
+  .card .pname { font-weight:700; font-size:1.05rem; margin-bottom:4px; }
+  .card .price { font-family:'Inter'; font-weight:900; font-size:1.7rem; letter-spacing:-0.01em; }
+  .card .price small { font-size:0.8rem; font-weight:500; color:var(--steel); font-family:'Noto Sans JP'; }
+  .card .pdesc { color:var(--steel); font-size:0.82rem; margin-top:10px; }
+  .card .feat { list-style:none; margin:12px 0 0; padding:0; }
+  .card .feat li { font-size:0.82rem; color:var(--text); padding:3px 0 3px 20px; position:relative; }
+  .card .feat li::before { content:'✓'; position:absolute; left:0; color:var(--accent); font-weight:900; }
+  .card.premium .feat li::before { color:var(--premium); }
+  .card .soon { margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); }
+  .card .soon-h { font-size:0.72rem; color:var(--steel); margin-bottom:4px; }
+  .card .soon li { font-size:0.78rem; color:var(--steel); padding:2px 0 2px 20px; position:relative; list-style:none; }
+  .card .soon li::before { content:'🔜'; position:absolute; left:0; font-size:0.7rem; }
+  .card .soon ul { margin:0; padding:0; }
+  .card .soon-badge { display:inline-block; font-size:0.62rem; font-weight:700; background:#f59e0b; color:#3b2600; padding:1px 7px; border-radius:999px; margin-left:6px; }
+  .card .promo {
+    display:none; position:absolute; top:-10px; left:16px;
+    background: #f59e0b; color:#3b2600; font-size:0.68rem; font-weight:700;
+    padding:3px 9px; border-radius:999px;
+  }
+  .card.premium.selected { border-color: var(--premium); box-shadow: 0 0 0 1px var(--premium), 0 0 26px rgba(192,38,211,0.3); }
+  .card.premium.selected .radio { border-color: var(--premium); background: var(--premium); }
+
+  /* vault disabled state */
+  .card.disabled { cursor:not-allowed; opacity:0.42; filter: grayscale(0.7); }
+  .card.disabled:hover { transform:none; }
+  .card .lock-note {
+    display:none; margin-top:10px; font-size:0.72rem; color:#fca5a5;
+    background: rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.25); border-radius:8px; padding:6px 8px;
+  }
+  .card.disabled .lock-note { display:block; }
+
+  /* ===== summary ===== */
+  .summary {
+    margin-top: 8px; background: linear-gradient(135deg, var(--navy-2), var(--surface));
+    border:1px solid var(--line); border-radius: var(--radius); padding: 26px 24px;
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:20px;
+  }
+  .summary .sel { color:var(--steel); font-size:0.9rem; }
+  .summary .sel b { color:var(--text); }
+  .summary .totals { text-align:right; }
+  .summary .row { display:flex; justify-content:flex-end; gap:10px; align-items:baseline; }
+  .summary .k { color:var(--steel); font-size:0.82rem; }
+  .summary .v { font-family:'Inter'; font-weight:700; }
+  .summary .v-month { font-size:2rem; font-weight:900; color:var(--accent); }
+  .summary .note { color:var(--steel); font-size:0.74rem; margin-top:6px; }
+
+  /* ===== CTA ===== */
+  .cta-row { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:34px; }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px; padding:14px 30px; border-radius:999px;
+    font-weight:700; font-size:0.98rem; text-decoration:none; transition: transform .15s, opacity .15s, background .15s;
+    cursor:pointer; border:none;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color:#04222a; }
+  .btn-primary:hover { transform: translateY(-2px); }
+  .btn-line { background:#06C755; color:#fff; }
+  .btn-line:hover { transform: translateY(-2px); opacity:0.92; }
+  .btn-ghost { background:transparent; color:var(--text); border:1.5px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--accent); }
+
+  .final { text-align:center; background: radial-gradient(900px 400px at 50% 120%, rgba(0,180,180,0.16), transparent 60%); }
+  .final h2 { font-size: clamp(1.5rem, 4vw, 2.2rem); font-weight:700; margin-bottom:14px; }
+  .final p { color:var(--steel); margin-bottom:6px; }
+
+  footer.site {
+    border-top:1px solid var(--line); padding:36px 20px; text-align:center; color:var(--steel); font-size:0.8rem;
+  }
+  footer.site .fp { font-family:'Inter'; font-weight:900; color:var(--text); letter-spacing:0.02em; }
+
+  /* ===== responsive ===== */
+  @media (max-width: 760px) {
+    .cards { grid-template-columns: 1fr; }
+    .summary { flex-direction:column; align-items:stretch; text-align:left; }
+    .summary .totals { text-align:left; }
+    .summary .row { justify-content:flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="container">
+    <div class="brand">
+      <span class="brand-mark">FP</span>
+      <span class="brand-name">FinancePulse</span>
+    </div>
+    <h1>決算書PDFを入れるだけ。<br><span class="accent">経営の数字</span>が、動き出す。</h1>
+    <p class="lead">
+      会計ソフト連携も、面倒な入力もいりません。決算書PDFを読み込むだけで、
+      BS / PL / CF・経営レポート・SWOT/3Cまで自動で。まずは「どこまでやるか」と「どこに置くか」を選ぶだけ。
+    </p>
+    <div class="hero-badges">
+      <span class="hero-badge">✓ 会計ソフト連携不要</span>
+      <span class="hero-badge">✓ 初期費用 0円〜</span>
+      <span class="hero-badge">✓ 決算書PDFをAIが自動読取</span>
+    </div>
+  </div>
+</header>
+
+<!-- ===== 2-STEP PRICING ===== -->
+<section id="pricing">
+  <div class="container">
+    <span class="section-label">Pricing</span>
+    <h2 class="section-h2">シンプルな2ステップ料金</h2>
+    <p class="section-lead">「どこまでやるか（プラン）」×「どこに置くか（金庫）」を選ぶだけ。</p>
+
+    <!-- STEP 1: PLAN -->
+    <div class="step">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">どこまでやる？ <span class="step-sub">— プラン（月額・税別）</span></div>
+        </div>
+      </div>
+      <div class="cards" id="plan-cards"></div>
+    </div>
+
+    <!-- STEP 2: VAULT -->
+    <div class="step">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">どこに置く？ <span class="step-sub">— 金庫（保存先・初期費用）</span></div>
+        </div>
+      </div>
+      <div class="cards" id="vault-cards"></div>
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="summary" id="summary">
+      <div class="sel" id="summary-sel"></div>
+      <div class="totals">
+        <div class="row"><span class="k">月額</span><span class="v v-month" id="sum-month"></span></div>
+        <div class="row"><span class="k">初期費用</span><span class="v" id="sum-init"></span></div>
+        <div class="note" id="sum-note"></div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-row">
+      <a href="#" data-cta="line" class="btn btn-line">LINEで登録して相談する</a>
+      <a href="#" data-cta="demo" class="btn btn-primary">無料デモを触ってみる</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FINAL CTA ===== -->
+<section class="final" id="cta-final">
+  <div class="container">
+    <h2>まずは「消える」お試しから。</h2>
+    <p>無料プランでサンプルを、デモで操作感を。<br>合うと感じたら、プランと金庫を選ぶだけで始められます。</p>
+    <div class="cta-row">
+      <a href="#" data-cta="demo" class="btn btn-primary">デモを触ってみる</a>
+      <a href="#" data-cta="line" class="btn btn-line">LINEで相談する</a>
+    </div>
+  </div>
+</section>
+
+<footer class="site">
+  <p><span class="fp">FinancePulse</span> — Powered by 5web.jp</p>
+  <p style="margin-top:8px">運営：株式会社メモリアルサービス（香川県東かがわ市）</p>
+  <p style="margin-top:8px">© 2026 5web.jp All rights reserved.</p>
+</footer>
+
+<script>
+  // ===== 料金・ラベル定数（ここだけ触れば料金改定できる） =====
+  const CONSTS = {
+    PLANS: [
+      { id:'lite', name:'ライト', price:19800,
+        feats:['決算書PDF解析（AI-OCR）', '財務三表 BS / PL / CF', 'KPI・経営コックピット', '経営レポート自動生成'] },
+      { id:'standard', name:'スタンダード', price:29800,
+        feats:['ライトの全機能', '業績予測（Forecast）', '改善提案（Strategy）', '月次CSV取込', 'ローカル永続保存・複数期追跡'] },
+      { id:'premium', name:'プレミアム', price:49800,
+        feats:['スタンダードの全機能', '店舗別・複数拠点PL／店舗間比較', 'SWOT・3C 戦略分析'],
+        soon:['健全性アラート・自動通知', '定期レポート自動配信', '複数社（グループ）管理'] },
+    ],
+    // init: 数値=初期費用 / null=個別見積り
+    VAULTS: [
+      { id:'local',  name:'ローカル', init:0,    note:'単一PC・ブラウザ内に保存（データは外に出ません）' },
+      { id:'saas',   name:'SaaS',     init:0,    note:'クラウドで提供・どこからでも' },
+      { id:'onprem', name:'オンプレ', init:null, note:'自社サーバーに設置' },
+    ],
+    // 景表法用「先行○社限定価格」ラベル（後付け表示フラグ）
+    PROMO: { enabled:false, label:'先行10社限定価格' },
+    VAULT_PREMIUM_LOCAL_TOOLTIP: '自動処理はサーバーが必要なためオンプレ/SaaSのみ',
+    // CTA導線URL（ここだけ触れば全CTAに反映）
+    CTA: {
+      LINE_URL: 'https://lin.ee/VOXmNLx',
+      DEMO_URL: 'https://finance.5web.jp/',
+    },
+  };
+
+  // ===== 状態（デフォルト：スタンダード × ローカル） =====
+  let selectedPlan = 'standard';
+  let selectedVault = 'local';
+
+  const yen = (n) => '¥' + n.toLocaleString('ja-JP');
+  const planById  = (id) => CONSTS.PLANS.find(p => p.id === id);
+  const vaultById = (id) => CONSTS.VAULTS.find(v => v.id === id);
+
+  // プレミアム選択時はローカル金庫を選べない
+  const isVaultDisabled = (vaultId) => (selectedPlan === 'premium' && vaultId === 'local');
+
+  function renderPlans() {
+    const wrap = document.getElementById('plan-cards');
+    wrap.innerHTML = '';
+    CONSTS.PLANS.forEach(p => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'card' + (p.id === 'premium' ? ' premium' : '') + (selectedPlan === p.id ? ' selected' : '');
+      el.setAttribute('aria-pressed', selectedPlan === p.id);
+      const feats = (p.feats || []).map(f => '<li>' + f + '</li>').join('');
+      const soon = (p.soon && p.soon.length)
+        ? '<div class="soon"><div class="soon-h">今後の追加予定<span class="soon-badge">近日提供</span></div><ul>' +
+            p.soon.map(s => '<li>' + s + '</li>').join('') + '</ul></div>'
+        : '';
+      el.innerHTML =
+        '<span class="promo"' + (CONSTS.PROMO.enabled ? ' style="display:block"' : '') + '>' + CONSTS.PROMO.label + '</span>' +
+        '<span class="radio"></span>' +
+        '<div class="pname">' + p.name + '</div>' +
+        '<div class="price">' + yen(p.price) + '<small>/月</small></div>' +
+        '<ul class="feat">' + feats + '</ul>' +
+        soon;
+      el.addEventListener('click', () => selectPlan(p.id));
+      wrap.appendChild(el);
+    });
+  }
+
+  function renderVaults() {
+    const wrap = document.getElementById('vault-cards');
+    wrap.innerHTML = '';
+    CONSTS.VAULTS.forEach(v => {
+      const disabled = isVaultDisabled(v.id);
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'card' + (selectedVault === v.id && !disabled ? ' selected' : '') + (disabled ? ' disabled' : '');
+      el.setAttribute('aria-pressed', selectedVault === v.id && !disabled);
+      if (disabled) { el.setAttribute('aria-disabled', 'true'); el.title = CONSTS.VAULT_PREMIUM_LOCAL_TOOLTIP; }
+      const initLabel = (v.init === null) ? '個別見積り' : (v.init === 0 ? '¥0' : yen(v.init));
+      el.innerHTML =
+        '<span class="radio"></span>' +
+        '<div class="pname">' + v.name + '</div>' +
+        '<div class="price">' + initLabel + (v.init === null ? '' : '<small>／初期費用</small>') + '</div>' +
+        '<div class="pdesc">' + v.note + '</div>' +
+        '<div class="lock-note">🔒 ' + CONSTS.VAULT_PREMIUM_LOCAL_TOOLTIP + '</div>';
+      el.addEventListener('click', () => selectVault(v.id));
+      wrap.appendChild(el);
+    });
+  }
+
+  function selectPlan(id) {
+    selectedPlan = id;
+    // プレミアムに切替 & 現在ローカルなら → SaaSへ自動退避
+    if (selectedPlan === 'premium' && selectedVault === 'local') {
+      selectedVault = 'saas';
+    }
+    renderAll();
+  }
+
+  function selectVault(id) {
+    if (isVaultDisabled(id)) return; // 選択不可
+    selectedVault = id;
+    renderAll();
+  }
+
+  function renderSummary() {
+    const p = planById(selectedPlan);
+    const v = vaultById(selectedVault);
+    document.getElementById('summary-sel').innerHTML =
+      'ご選択：<b>' + p.name + '</b> × <b>' + v.name + '</b>金庫';
+    document.getElementById('sum-month').textContent = yen(p.price);
+    document.getElementById('sum-init').textContent = (v.init === null) ? '個別見積り' : (v.init === 0 ? '¥0' : yen(v.init));
+    let note = '月額は金庫にかかわらず一定です。';
+    if (v.init === null) note += ' オンプレは初期費用を個別お見積りします。';
+    document.getElementById('sum-note').textContent = note;
+  }
+
+  function renderAll() { renderPlans(); renderVaults(); renderSummary(); }
+  renderAll();
+
+  // CTA導線URLを CONSTS.CTA から一括設定（LINE友だち追加 / デモ）
+  document.querySelectorAll('[data-cta]').forEach(a => {
+    const kind = a.getAttribute('data-cta');
+    if (kind === 'line') a.href = CONSTS.CTA.LINE_URL;
+    if (kind === 'demo') a.href = CONSTS.CTA.DEMO_URL;
+    if (kind === 'line') { a.target = '_blank'; a.rel = 'noopener'; }
+  });
+</script>
+
+</body>
+</html>

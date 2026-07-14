@@ -4,7 +4,7 @@ import { kpiGlossary } from '../data/kpiGlossary'
 import { formatMillionYen } from '../lib/format'
 import type { FinancialBundle } from '../types/financials'
 import { AmountTable } from './AmountTable'
-import { ApiKeySetup, LS_KEY, LS_KEY_COMPANY, getLicensePlan } from './ApiKeySetup'
+import { ApiKeySetup, LS_KEY, LS_KEY_COMPANY, getLicensePlan, capsOf } from './ApiKeySetup'
 import { BepSection } from './BepSection'
 import { CockpitTab } from './CockpitTab'
 import { ForecastTab } from './ForecastTab'
@@ -35,6 +35,58 @@ const AXIS_TICK  = { fill: '#94a3b8', fontSize: 12 } as const
 const AXIS_TICK_S = { fill: '#94a3b8', fontSize: 11 } as const
 const GRID_STROKE = '#2d4057'
 const tooltipSurface = { background: '#243447', border: '1px solid #2d4057', borderRadius: 8, color: '#ffffff', fontSize: '0.8rem' }
+
+// プランバッジ表示（ライト/スタンダード/プレミアム）
+const PLAN_BADGE = {
+  lite:     { label: 'LITE',     title: 'Liteプラン認証済み',     grad: 'linear-gradient(135deg,#0d9488 0%,#10b981 100%)', shadow: '0 0 0 1px rgba(16,185,129,0.5), 0 0 12px rgba(16,185,129,0.35)' },
+  standard: { label: 'STANDARD', title: 'Standardプラン認証済み', grad: 'linear-gradient(135deg,#0284c7 0%,#06b6d4 100%)', shadow: '0 0 0 1px rgba(6,182,212,0.5), 0 0 12px rgba(6,182,212,0.35)' },
+  premium:  { label: 'PREMIUM',  title: 'Premiumプラン認証済み',  grad: 'linear-gradient(135deg,#7c3aed 0%,#c026d3 100%)', shadow: '0 0 0 1px rgba(192,38,211,0.5), 0 0 12px rgba(192,38,211,0.35)' },
+} as const
+
+// ===== 機能ロック表示（プランに応じて文言出し分け）=====
+function FeatureLock({ need, feature }: { need: 'standard' | 'premium'; feature: string }) {
+  const label = need === 'premium' ? 'プレミアム' : 'スタンダード'
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: '10px', padding: '56px 24px', textAlign: 'center',
+      background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 12,
+      color: 'var(--text)',
+    }}>
+      <div style={{ fontSize: '2rem' }} aria-hidden="true">🔒</div>
+      <p style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-h)' }}>{label}限定機能です</p>
+      <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+        {feature}は{label}プラン以上でご利用いただけます。<br />
+        ⚙️ からライセンスキーをアップグレードしてください。
+      </p>
+    </div>
+  )
+}
+
+// ===== 近日提供（未実装・表示のみ・プレミアム画面内）=====
+function ComingSoonPanel() {
+  const items = ['健全性アラート・自動通知', '定期レポートの自動配信', '複数社（グループ）管理']
+  return (
+    <section style={{ marginTop: 20 }} aria-label="近日提供">
+      <h3 style={{ fontSize: '0.95rem', color: 'var(--text-h)', marginBottom: 10 }}>🔜 近日提供予定（プレミアム）</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+        {items.map((it) => (
+          <div key={it} style={{
+            position: 'relative', padding: '18px 16px', borderRadius: 10,
+            background: 'var(--surface)', border: '1px solid var(--border)', opacity: 0.65,
+          }}>
+            <span style={{
+              position: 'absolute', top: 10, right: 10, fontSize: '0.62rem', fontWeight: 700,
+              background: '#f59e0b', color: '#3b2600', padding: '2px 8px', borderRadius: 999,
+            }}>近日提供</span>
+            <p style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)' }}>{it}</p>
+            <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>準備中（現在はご利用いただけません）</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 type TabId = 'cockpit' | 'bs' | 'pl' | 'cf' | 'forecast' | 'strategy'
 type Granularity = 'annual' | 'monthly'
@@ -118,7 +170,7 @@ export function FinancialDashboard() {
   const [modalType, setModalType] = useState<'pdf' | 'csv' | null>(null)
   const [showApiSetup, setShowApiSetup] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(() => !!localStorage.getItem(LS_KEY))
-  const [plan, setPlan] = useState<'free'|'standard'|'premium'>(() => getLicensePlan())
+  const [plan, setPlan] = useState<'free'|'lite'|'standard'|'premium'>(() => getLicensePlan())
   const [reportLoading, setReportLoading] = useState(false)
   const [storeTab, setStoreTab] = useState<string>('all')
   const [showStoreModal, setShowStoreModal] = useState(false)
@@ -190,11 +242,19 @@ export function FinancialDashboard() {
     deletePeriod(period)
   }, [bundle.periods.length, deletePeriod])
 
-  // ===== 全クリアハンドラー =====
+  // 機能ゲーティング（確定マトリクス）
+  const caps = capsOf(plan)
+  // ローカル永続保存の対象プラン（FP-STD / FP-PRE）
+  const persistEnabled = caps.persist
+
+  // ===== 全クリアハンドラー（STD/PREは保存データも消去） =====
   const handleClearAll = useCallback(() => {
-    if (!window.confirm('全ての財務データを削除します。よろしいですか？')) return
+    const msg = persistEnabled
+      ? 'ブラウザに保存された永続データを含め、全ての財務データを削除してサンプル表示に戻します。よろしいですか？'
+      : '全ての財務データを削除します。よろしいですか？'
+    if (!window.confirm(msg)) return
     clearAll()
-  }, [clearAll])
+  }, [clearAll, persistEnabled])
 
   // ===== 経営レポート生成 =====
   const handleGenerateReport = useCallback(async () => {
@@ -304,7 +364,7 @@ ${dataText}
   <div class="kpi-card"><div class="kpi-label">長期借入金</div><div class="kpi-value">${longDebt}百万円</div></div>
 </div>
 ${content}
-<div class="report-footer">Powered by FinanceScope / 5web.jp　｜　本レポートはAIによる自動生成です。最終判断は専門家にご確認ください。</div>
+<div class="report-footer">Powered by FinancePulse / 5web.jp　｜　本レポートはAIによる自動生成です。最終判断は専門家にご確認ください。</div>
 </body>
 </html>`
 
@@ -362,10 +422,10 @@ ${content}
     <div className="dash">
       <header className="dash-header">
         <div>
-          <h1 className="dash-title">FinanceScope</h1>
+          <h1 className="dash-title">FinancePulse</h1>
           <p className="dash-sub">BS / PL / CF / Forecast / Strategy</p>
           {plan !== 'free' && (
-            <span title={plan === 'premium' ? 'Premiumプラン認証済み' : 'Standardプラン認証済み'} style={{
+            <span title={PLAN_BADGE[plan].title} style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
@@ -375,20 +435,16 @@ ${content}
               fontSize: '0.68rem',
               fontWeight: 700,
               letterSpacing: '0.08em',
-              background: plan === 'premium'
-                ? 'linear-gradient(135deg,#7c3aed 0%,#c026d3 100%)'
-                : 'linear-gradient(135deg,#0284c7 0%,#06b6d4 100%)',
+              background: PLAN_BADGE[plan].grad,
               color: '#fff',
-              boxShadow: plan === 'premium'
-                ? '0 0 0 1px rgba(192,38,211,0.5), 0 0 12px rgba(192,38,211,0.35)'
-                : '0 0 0 1px rgba(6,182,212,0.5), 0 0 12px rgba(6,182,212,0.35)',
+              boxShadow: PLAN_BADGE[plan].shadow,
               cursor: 'default',
             }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 1l2.39 3.31L18 3.27l.74 3.99 3.99.74-1.04 3.61L24 14l-3.31 2.39L21.73 20l-3.99-.74-.74 3.99-3.61-1.04L12 24l-2.39-3.31L6 21.73l-.74-3.99-3.99-.74 1.04-3.61L0 10l3.31-2.39L2.27 4l3.99.74L7 .75l3.61 1.04z" opacity="0.95"/>
                 <path d="M9 12.5l2 2 4-4.5" stroke="#0a1628" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
               </svg>
-              {plan === 'premium' ? 'PREMIUM' : 'STANDARD'}
+              {PLAN_BADGE[plan].label}
             </span>
           )}
         </div>
@@ -397,37 +453,40 @@ ${content}
             type="button"
             className="btn-report"
             onClick={handleGenerateReport}
-            disabled={reportLoading || dataSource === 'sample' || plan === 'free'}
-            title={plan === 'free' ? 'スタンダード以上のプランで利用可能' : dataSource === 'sample' ? 'PDFを読み込んでから使用できます' : '経営財務レポートを生成'}
+            disabled={reportLoading || dataSource === 'sample' || !caps.report}
+            title={!caps.report ? 'ライト以上のプランで利用可能' : dataSource === 'sample' ? 'PDFを読み込んでから使用できます' : '経営財務レポートを生成'}
           >
             {reportLoading ? <><span className="spinner" aria-hidden="true" /> 生成中...</> : '📊 経営レポート'}
           </button>
           <button
             type="button"
             className="btn-upload-pdf"
-            onClick={() => setModalType('pdf')}
-            disabled={pdfStatus === 'loading'}
+            onClick={() => caps.pdf && setModalType('pdf')}
+            disabled={pdfStatus === 'loading' || !caps.pdf}
             aria-busy={pdfStatus === 'loading'}
+            title={!caps.pdf ? 'ライト以上のプランで利用可能' : '決算書PDFを読み込む'}
           >
             {pdfStatus === 'loading' ? (
               <><span className="spinner" aria-hidden="true" /> 解析中...</>
-            ) : '📄 決算書PDF'}
+            ) : caps.pdf ? '📄 決算書PDF' : '🔒 決算書PDF'}
           </button>
           <button
             type="button"
             className="btn-upload-csv"
-            onClick={() => setModalType('csv')}
+            onClick={() => caps.csv && setModalType('csv')}
+            disabled={!caps.csv}
+            title={!caps.csv ? 'スタンダード以上のプランで利用可能' : '月次CSVを取り込む'}
           >
-            📊 月次CSV
+            {caps.csv ? '📊 月次CSV' : '🔒 月次CSV'}
           </button>
           {dataSource !== 'sample' && (
             <button
               type="button"
               className="btn-clear-all"
               onClick={handleClearAll}
-              title="全データを削除"
+              title={persistEnabled ? '保存データ（IndexedDB）を含め全データを削除' : '全データを削除'}
             >
-              🗑 全クリア
+              {persistEnabled ? '🗑 保存データをクリア' : '🗑 全クリア'}
             </button>
           )}
           <button
@@ -528,8 +587,8 @@ ${content}
               <NoMonthlyData />
             ) : (
               <div className="panel-grid">
-                {/* 店舗タブ（STD以上） */}
-                {plan !== 'free' && (
+                {/* 店舗タブ（プレミアムのみ） */}
+                {caps.stores && (
                   <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
                     <button
                       type="button"
@@ -554,7 +613,7 @@ ${content}
                   </div>
                 )}
                 {/* 店舗比較グラフ（2店舗以上・全社タブ時） */}
-                {plan !== 'free' && storeTab === 'all' && (bundle.stores ?? []).length >= 2 && (() => {
+                {caps.stores && storeTab === 'all' && (bundle.stores ?? []).length >= 2 && (() => {
                   const stores = bundle.stores ?? []
                   const allStoreNames = stores.map(s => s.storeName)
                   const compData = stores[0].periods.map((p, pi) => {
@@ -592,7 +651,7 @@ ${content}
                   )
                 })()}
                 {/* 店舗個別PL or 全社PL */}
-                {plan !== 'free' && storeTab !== 'all' ? (() => {
+                {caps.stores && storeTab !== 'all' ? (() => {
                   const store = (bundle.stores ?? []).find(s => s.storeName === storeTab)
                   if (!store) return null
                   return (
@@ -674,13 +733,20 @@ ${content}
 
         {tab === 'forecast' && (
           <div className="panel" role="tabpanel">
-            <ForecastTab bundle={bundle} />
+            {caps.forecast ? <ForecastTab bundle={bundle} /> : <FeatureLock need="standard" feature="業績予測（Forecast）" />}
           </div>
         )}
 
         {tab === 'strategy' && (
           <div className="panel" role="tabpanel">
-            <StrategyTab bundle={bundle} />
+            {caps.strategy ? (
+              <>
+                <StrategyTab bundle={bundle} />
+                {caps.swot && <ComingSoonPanel />}
+              </>
+            ) : (
+              <FeatureLock need="standard" feature="改善提案（Strategy）" />
+            )}
           </div>
         )}
       </div>

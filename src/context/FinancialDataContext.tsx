@@ -16,7 +16,19 @@ import {
 } from '../lib/mergeBundle'
 import { parseFinancialsJson } from '../lib/parseFinancialsJson'
 import { parseCsv } from '../lib/parseCsv'
+import {
+  clearPersistedBundle,
+  loadPersistedBundle,
+  savePersistedBundle,
+} from '../lib/persistBundle'
+import { getLicensePlan } from '../components/ApiKeySetup'
 import type { FinancialBundle } from '../types/financials'
+
+// ローカル永続保存の対象プラン判定（FP-STD / FP-PRE のみ）
+function persistEnabled(): boolean {
+  const plan = getLicensePlan()
+  return plan === 'standard' || plan === 'premium'
+}
 
 export type FinancialDataSource = 'sample' | 'custom' | 'pdf'
 
@@ -147,13 +159,25 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => { bundleRef.current = bundle }, [bundle])
   useEffect(() => { dataSourceRef.current = dataSource }, [dataSource])
 
-  // 起動時にfinancials.jsonを読み込む（既存ロジックそのまま）
+  // 起動時：永続データ（STD/PRE）を優先復元 → なければ financials.json → サンプル
   useEffect(() => {
     let cancelled = false
     const url = defaultUrl()
 
     ;(async () => {
       setLoadError(null)
+
+      // 1. ローカル永続保存（IndexedDB）から復元（対象プランのみ）
+      if (persistEnabled()) {
+        const persisted = await loadPersistedBundle()
+        if (persisted && !cancelled) {
+          setBundle(persisted)
+          setDataSource('pdf')
+          return
+        }
+      }
+
+      // 2. financials.json（デプロイ時カスタム／既存ロジックそのまま）
       try {
         const res = await fetch(url, { cache: 'no-store' })
         if (!res.ok) {
@@ -188,10 +212,18 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // ===== 全クリア =====
+  // ===== 永続保存：bundle変化時に保存（STD/PRE・サンプル時は保存しない） =====
+  useEffect(() => {
+    if (!persistEnabled()) return
+    if (dataSource === 'sample') return
+    void savePersistedBundle(bundle)
+  }, [bundle, dataSource])
+
+  // ===== 全クリア（保存データも消去） =====
   const clearAll = useCallback(() => {
     setBundle(sampleFinancialBundle)
     setDataSource('sample')
+    void clearPersistedBundle()
   }, [])
 
   // ===== 個別期削除 =====
@@ -200,6 +232,7 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
     if (newBundle.periods.length === 0) {
       setBundle(sampleFinancialBundle)
       setDataSource('sample')
+      void clearPersistedBundle()
     } else {
       setBundle(newBundle)
     }
