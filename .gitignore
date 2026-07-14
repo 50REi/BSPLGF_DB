@@ -24,3 +24,10 @@ dist-ssr
 *.sw?
 public/financials.json
 .env
+
+# Backup / experiment junk
+*.bak
+*.bak_*
+
+# Secret test env (実APIキー・絶対にコミットしない)
+BSPLGF_DB_test_env.txt
